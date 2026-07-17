@@ -23,7 +23,6 @@ import {
   Skull,
   MessageCircle,
   Puzzle,
-  Github,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IS_DESKTOP } from "@/lib/runtime";
@@ -40,7 +39,6 @@ import GoogleDriveBackupSection from "@/components/GoogleDriveBackupSection";
 import ExtensionTokenInjectorDialog from "@/components/ExtensionTokenInjectorDialog";
 import rolldashExtAsset from "@/assets/rolldash-extension.zip.asset.json";
 import extensionOpenAsset from "@/assets/extension-open.zip.asset.json";
-import GithubConfigSection from "@/components/GithubConfigSection";
 // (assets ainda usados na seção Downloads para web)
 
 type SectionId =
@@ -50,7 +48,6 @@ type SectionId =
   | "extensao"
   | "backup"
   | "atualizacao"
-  | "github"
   | "montante"
   | "downloads"
   | "conta";
@@ -69,7 +66,6 @@ const SECTIONS: Section[] = [
   { id: "extensao", label: "Extensão", icon: Puzzle },
   { id: "backup", label: "Backup", icon: DatabaseBackup },
   { id: "atualizacao", label: "Atualização", icon: RefreshCw, hidden: !IS_DESKTOP },
-  { id: "github", label: "GitHub", icon: Github },
   { id: "montante", label: "Montante (Lucro/Prejuízo)", icon: Coins, hidden: !IS_DESKTOP },
   { id: "downloads", label: "Downloads", icon: Download, hidden: IS_DESKTOP },
   { id: "conta", label: "Conta", icon: User },
@@ -523,7 +519,6 @@ const CONTENT: Record<SectionId, React.ComponentType> = {
   extensao: SectionExtensao,
   backup: SectionBackup,
   atualizacao: SectionAtualizacao,
-  github: GithubConfigSection,
   montante: SectionMontante,
   downloads: SectionDownloads,
   conta: SectionConta,

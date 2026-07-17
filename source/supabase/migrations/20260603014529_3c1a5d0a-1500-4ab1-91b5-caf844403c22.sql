@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_events ADD COLUMN IF NOT EXISTS source_token text;

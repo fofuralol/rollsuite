@@ -65,56 +65,6 @@ function hasMatchedKeywords(message: WaMessage) {
   return Array.isArray(message.matched) && message.matched.some((value) => String(value || "").trim().length > 0);
 }
 
-const forwardedCardKeys = new Set<string>();
-
-function parseForwardNumbers(raw: unknown) {
-  return String(raw || "")
-    .split(/[\s,;\n]+/)
-    .map((value) => value.replace(/\D+/g, ""))
-    .filter((value) => value.length >= 8)
-    .map((value) => (value.length === 10 || value.length === 11 ? `55${value}` : value));
-}
-
-async function forwardConfiguredWaMessage(message: WaMessage) {
-  if (!IS_DESKTOP || message.is_comprovante || !hasMatchedKeywords(message)) return;
-  const api = (window as any).electronAPI;
-  if (!api) return;
-
-  const config = await api.waConfigGet?.().catch(() => null);
-  const enabledRaw = config?.data?.forward_enabled;
-  const enabled = typeof enabledRaw === "boolean"
-    ? enabledRaw
-    : typeof enabledRaw === "string"
-      ? enabledRaw !== "false"
-      : true;
-  if (!enabled) return;
-
-  if (api.waForwardCard) {
-    try { await api.waForwardCard(message); return; } catch {}
-  }
-
-  const key = String(message.source_msg_id || message.id || message.mensagem || "").trim();
-  if (key) {
-    if (forwardedCardKeys.has(key)) return;
-    forwardedCardKeys.add(key);
-    if (forwardedCardKeys.size > 1000) {
-      const first = forwardedCardKeys.values().next().value;
-      if (first) forwardedCardKeys.delete(first);
-    }
-  }
-
-  const nums = parseForwardNumbers(config?.data?.forward_numbers);
-  if (!nums.length || !api.waSendNow) return;
-
-  const matched = Array.isArray(message.matched) ? message.matched.filter(Boolean).join(", ") : "";
-  const text = `↪️ Encaminhado (${matched})\n👤 ${message.grupo || ""}\n\n${message.mensagem || ""}`;
-  for (const num of nums) {
-    try {
-      await api.waSendNow({ chat_id: num, fallback_phone: num, text });
-    } catch {}
-  }
-}
-
 function uniqKeywords(rows: WaKeyword[]) {
   const seen = new Set<string>();
   const out: WaKeyword[] = [];
@@ -491,9 +441,6 @@ export function useWhatsApp() {
           const msg = payload.new as WaMessage;
           if (!active) return;
           handleIncoming(msg);
-          if (IS_DESKTOP && !msg.is_comprovante) {
-            forwardConfiguredWaMessage(msg).catch(() => {});
-          }
         })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "wa_messages", filter: `user_id=eq.${userId}` }, (payload) => {
           const msg = payload.new as WaMessage;
@@ -514,9 +461,6 @@ export function useWhatsApp() {
       offWa = api?.onWaMessage?.((msg: WaMessage) => {
         if (!active) return;
         handleIncoming(msg);
-        if (!msg.is_comprovante) {
-          forwardConfiguredWaMessage(msg).catch(() => {});
-        }
         if (!msg.is_comprovante && !seenIds.current.has(msg.id + "_pushed")) {
           seenIds.current.add(msg.id + "_pushed");
           import("@/integrations/desktop/pushForward").then(({ forwardWaMessage }) => {

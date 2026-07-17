@@ -1,0 +1,16 @@
+{
+  "name": "Monitor Turno + WhatsApp",
+  "short_name": "Monitor",
+  "id": "/monitor",
+  "description": "Ordem de Turno e mensagens do WhatsApp em tempo real.",
+  "start_url": "/monitor",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    { "src": "/monitor-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/monitor-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

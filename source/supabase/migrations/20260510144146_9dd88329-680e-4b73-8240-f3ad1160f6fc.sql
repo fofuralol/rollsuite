@@ -1,0 +1,1 @@
+CREATE POLICY "own push update" ON public.push_subscriptions FOR UPDATE USING (auth.uid() = user_id);

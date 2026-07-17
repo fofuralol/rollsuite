@@ -1,0 +1,1 @@
+ALTER TABLE public.wa_tasks ADD COLUMN IF NOT EXISTS pix_keys jsonb NOT NULL DEFAULT '[]'::jsonb;

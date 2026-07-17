@@ -1,0 +1,1 @@
+UPDATE auth.users SET email = 'fofuralol@rolls.local', raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('nickname','fofuralol') WHERE email = 'fofuralo@rolls.local';

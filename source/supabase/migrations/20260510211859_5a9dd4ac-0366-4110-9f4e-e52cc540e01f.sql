@@ -1,0 +1,3 @@
+ALTER TABLE public.wa_tasks 
+  ADD COLUMN IF NOT EXISTS link text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS nome_tarefa text NOT NULL DEFAULT '';

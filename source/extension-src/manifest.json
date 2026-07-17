@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Contador RollSuite",
+  "version": "3.0.0",
+  "description": "Monitora contador regressivo por detecção de pixel + OCR do saldo ao atingir a meta",
+  "permissions": ["tabs", "activeTab", "scripting", "storage", "tabCapture", "offscreen", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_icon": "icon-logo.png",
+    "default_title": "Contador RollSuite"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "popup.css", "popup.js", "license.js", "icon-logo.png", "tesseract.min.js", "tesseract-worker.min.js", "tesseract-core-simd-lstm.wasm.js", "tesseract-core-simd-lstm.wasm", "eng.traineddata.gz"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icon-logo.png",
+    "128": "icon-logo.png"
+  }
+}

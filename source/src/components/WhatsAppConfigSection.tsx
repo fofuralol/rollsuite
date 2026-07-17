@@ -13,14 +13,6 @@ import KeywordsTextarea from "@/components/KeywordsTextarea";
 import { IS_DESKTOP } from "@/lib/runtime";
 import { useLiveChatEnabled, setLiveChatEnabled } from "@/hooks/useLiveChatEnabled";
 
-function parseForwardNumbers(raw: string) {
-  return String(raw || "")
-    .split(/[\s,;\n]+/)
-    .map((value) => value.replace(/\D+/g, ""))
-    .filter((value) => value.length >= 8)
-    .map((value) => (value.length === 10 || value.length === 11 ? `55${value}` : value));
-}
-
 export default function WhatsAppConfigSection() {
   const {
     keywords,
@@ -38,9 +30,6 @@ export default function WhatsAppConfigSection() {
   const [metaToken, setMetaToken] = useState<string>("");
   const [proofTtlMin, setProofTtlMin] = useState<number>(30);
   const [proofTtlDirty, setProofTtlDirty] = useState(false);
-  const [forwardNumbers, setForwardNumbers] = useState<string>("");
-  const [forwardDirty, setForwardDirty] = useState(false);
-  const [forwardEnabled, setForwardEnabledState] = useState<boolean>(true);
   
 
   useEffect(() => {
@@ -49,30 +38,8 @@ export default function WhatsAppConfigSection() {
     api?.waConfigGet?.().then((r: any) => {
       const v = Number(r?.data?.proof_ttl_min);
       if (isFinite(v) && v > 0) setProofTtlMin(v);
-      const fn = r?.data?.forward_numbers;
-      if (typeof fn === "string") setForwardNumbers(fn);
-      const fe = r?.data?.forward_enabled;
-      if (typeof fe === "boolean") setForwardEnabledState(fe);
-      else if (typeof fe === "string") setForwardEnabledState(fe !== "false");
     }).catch(() => {});
   }, []);
-
-  const toggleForwardEnabled = async (val: boolean) => {
-    setForwardEnabledState(val);
-    const api = (window as any).electronAPI;
-    if (!api?.waConfigSet) {
-      toast.error("Recurso indisponível");
-      setForwardEnabledState(!val);
-      return;
-    }
-    try {
-      await api.waConfigSet({ forward_enabled: val });
-      toast.success(val ? "Reencaminhamento ativado" : "Reencaminhamento desativado");
-    } catch (e: any) {
-      toast.error(e?.message || "Falha ao salvar");
-      setForwardEnabledState(!val);
-    }
-  };
 
   const saveProofTtl = async () => {
     const api = (window as any).electronAPI;
@@ -80,14 +47,6 @@ export default function WhatsAppConfigSection() {
     await api.waConfigSet({ proof_ttl_min: proofTtlMin });
     setProofTtlDirty(false);
     toast.success(`Tempo de espera do comprovante: ${proofTtlMin} min`);
-  };
-
-  const saveForwardNumbers = async () => {
-    const api = (window as any).electronAPI;
-    if (!api?.waConfigSet) return;
-    await api.waConfigSet({ forward_numbers: forwardNumbers });
-    setForwardDirty(false);
-    toast.success("Números de reencaminhamento salvos");
   };
 
   useEffect(() => {
@@ -275,82 +234,6 @@ export default function WhatsAppConfigSection() {
               Salvar
             </Button>
           </div>
-        </div>
-      )}
-
-      {/* Reencaminhar para número */}
-      {IS_DESKTOP && (
-        <div className="rounded-md border border-border/40 bg-muted/30 p-3 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Reencaminhar mensagens que casam com palavra-chave</h3>
-            <Switch checked={forwardEnabled} onCheckedChange={toggleForwardEnabled} />
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {forwardEnabled
-              ? "Um número por linha, com DDI+DDD (ex.: 5511987654321)."
-              : "Reencaminhamento desativado. Ative o interruptor para voltar a enviar."}
-          </p>
-          <Textarea
-            value={forwardNumbers}
-            onChange={(e) => { setForwardNumbers(e.target.value); setForwardDirty(true); }}
-            placeholder="5511987654321"
-            className="text-xs font-mono min-h-[70px]"
-            disabled={!forwardEnabled}
-          />
-          <Button
-            size="sm"
-            variant={forwardDirty ? "default" : "outline"}
-            onClick={saveForwardNumbers}
-            disabled={!forwardDirty || !forwardEnabled}
-            className="h-8 w-full"
-          >
-            Salvar números
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 w-full gap-1"
-            disabled={!forwardEnabled}
-            onClick={async () => {
-              const api = (window as any).electronAPI;
-              if (!api) { toast.error("Recurso indisponível"); return; }
-              if (forwardDirty && api.waConfigSet) {
-                await api.waConfigSet({ forward_numbers: forwardNumbers });
-                setForwardDirty(false);
-              }
-
-              if (api.waForwardTest) {
-                const r = await api.waForwardTest("Teste de reencaminhamento do RollsSuite");
-                const data = r?.data;
-                if (!data) { toast.error(r?.error?.message || "Falha no teste"); return; }
-                if (data.error) { toast.error(data.error); return; }
-                const ok = (data.deliveries || []).filter((d: any) => d.ok).length;
-                const fail = (data.deliveries || []).filter((d: any) => !d.ok);
-                if (fail.length === 0) toast.success(`Enviado para ${ok} número(s)`);
-                else toast.error(`Falha em ${fail.length}: ${fail.map((f: any) => `${f.num} (${f.error || "erro"})`).join(" · ")}`);
-                return;
-              }
-
-              if (!api.waSendNow) { toast.error("Atualização nativa necessária para testar"); return; }
-              const nums = parseForwardNumbers(forwardNumbers);
-              if (!nums.length) { toast.error("Nenhum número configurado"); return; }
-              let ok = 0;
-              const fail: string[] = [];
-              for (const num of nums) {
-                const r = await api.waSendNow({
-                  chat_id: num,
-                  fallback_phone: num,
-                  text: "↪️ Teste de reencaminhamento\n\nTeste de reencaminhamento do RollsSuite",
-                });
-                if (r?.error) fail.push(`${num} (${r.error.message || "erro"})`);
-                else ok += 1;
-              }
-              if (fail.length === 0) toast.success(`Enviado para ${ok} número(s)`);
-              else toast.error(`Falha em ${fail.length}: ${fail.join(" · ")}`);
-            }}
-          >
-            <Play className="w-3 h-3" /> Testar reencaminhamento
-          </Button>
         </div>
       )}
 

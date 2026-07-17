@@ -1,0 +1,1 @@
+DELETE FROM public.dkdash_ranking WHERE nickname = 'fofuralol';

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="licenseGate" style="display:none;"></div>
+
+  <div id="appWrap">
+    <!-- HEADER -->
+    <div class="header">
+      <img src="icon-logo.png" alt="Logo">
+      <h1>Contador RollSuite</h1>
+      <button id="openSettings" class="icon-btn" title="Configurações">⚙</button>
+    </div>
+
+    <!-- VALORES -->
+    <div class="section">
+      <div class="row-check">
+        <input type="checkbox" id="showOverlay">
+        <label for="showOverlay">Mostrar monitor na página</label>
+      </div>
+
+      <div class="values-grid">
+        <div class="val-group">
+          <label>Meta</label>
+          <input type="number" id="targetValue" placeholder="100" min="0" step="1">
+        </div>
+        <div class="val-group">
+          <label>Bet (R$)</label>
+          <input type="number" id="betValue" placeholder="0.74" min="0" step="0.01">
+        </div>
+      </div>
+      <button class="btn btn-success" id="startBtn" disabled>⚡ Iniciar</button>
+      <button class="btn btn-danger" id="stopBtn" style="display:none;">⏹ Parar</button>
+    </div>
+
+    <div id="statusBar" style="display:none;"></div>
+
+
+    <!-- CARD ÚNICO: Importar / Código do mapeamento -->
+    <div class="section" id="codeCard">
+      <!-- Modo: VAZIO (input) -->
+      <div id="codeEmpty">
+        <div class="section-title" style="margin-bottom:8px;">📥 Importar mapeamento</div>
+        <div class="textarea-wrap" id="importWrap">
+          <textarea id="importCode" placeholder="Cole o código aqui (aplica automático)..."></textarea>
+          <button type="button" class="clear-btn" id="clearImport" title="Limpar">✕</button>
+        </div>
+      </div>
+
+      <!-- Modo: PREENCHIDO (código compartilhável) -->
+      <div id="codeFilled" style="display:none;">
+        <div class="filled-head">
+          <span class="section-title" style="color:var(--teal-2);">📋 Código atual</span>
+          <button id="resetCode" class="icon-btn" title="Limpar e colar novo">✕</button>
+        </div>
+        <textarea id="shareCode" readonly></textarea>
+        <button class="btn btn-accent btn-sm" id="copyCode" style="margin-top:8px;">📋 Copiar</button>
+      </div>
+    </div>
+
+    <!-- MAPEAMENTO (colapsado) -->
+    <div class="section">
+      <div class="section-header" id="toggleMappingSection">
+        <span class="section-title">🎯 Mapeamento</span>
+        <span class="chevron" id="mappingChevron">▸</span>
+      </div>
+      <div id="mappingContent" style="display:none;margin-top:10px;">
+        <div style="display:none;">
+          <div id="counterInfo"><span id="counterInfoText"></span></div>
+          <div id="buttonInfo"><span id="buttonInfoText"></span><button id="testClick"></button></div>
+          <div id="continueInfo"><span id="continueInfoText"></span></div>
+        </div>
+
+        <div class="pick-row">
+          <button class="btn btn-accent btn-sm" id="mapCounter">🔢 Área</button>
+          <button class="btn btn-danger btn-sm" id="mapButton">🛑 Botão</button>
+        </div>
+
+        <select id="presetMappingSelect">
+          <option value="">📌 Selecionar preset salvo...</option>
+          <option value="bikini5">Bikini 5 telas</option>
+        </select>
+
+        <div class="hint">Arraste no contador · Mapeie parar · Use preset</div>
+
+        <div class="tools-row">
+          <button class="btn btn-ghost btn-xs" id="toggleManual">📐 Manual</button>
+          <button class="btn btn-ghost btn-xs" id="clearMapping">🗑 Limpar</button>
+          <button class="btn btn-ghost btn-xs" id="reloadMapping">🔄</button>
+        </div>
+
+        <div id="manualSection" style="display:none;margin-top:10px;">
+          <div class="coord-group">
+            <div class="coord-label">🔢 Área</div>
+            <div class="coord-row">
+              <div class="coord-field"><label>X</label><input type="number" id="cX" min="0"></div>
+              <div class="coord-field"><label>Y</label><input type="number" id="cY" min="0"></div>
+              <div class="coord-field"><label>W</label><input type="number" id="cW" min="1"></div>
+              <div class="coord-field"><label>H</label><input type="number" id="cH" min="1"></div>
+            </div>
+          </div>
+          <div class="coord-group">
+            <div class="coord-label">🛑 Botão</div>
+            <div class="coord-row">
+              <div class="coord-field"><label>X</label><input type="number" id="bX" min="0"></div>
+              <div class="coord-field"><label>Y</label><input type="number" id="bY" min="0"></div>
+            </div>
+          </div>
+          <div class="coord-group">
+            <div class="coord-label">▶ Continuar</div>
+            <div class="coord-row">
+              <div class="coord-field"><label>X</label><input type="number" id="cbX" min="0"></div>
+              <div class="coord-field"><label>Y</label><input type="number" id="cbY" min="0"></div>
+            </div>
+          </div>
+          <button class="btn btn-accent btn-xs" id="applyManual">✔ Aplicar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS OVERLAY -->
+    <div class="settings-overlay" id="settingsOverlay">
+      <div class="settings-panel">
+        <div class="settings-head">
+          <h2>⚙ Configurações</h2>
+          <button class="icon-btn" id="closeSettings">✕</button>
+        </div>
+
+        <div class="values-grid">
+          <div class="val-group">
+            <label>🖱 Auto-clique</label>
+            <input type="number" id="autoClickCount" placeholder="∞" min="0" step="1">
+          </div>
+          <div class="val-group">
+            <label>Intervalo (ms)</label>
+            <input type="number" id="autoClickInterval" placeholder="150" min="50" step="50">
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label>🔔 Webhook</label>
+          <input type="text" id="webhookUrl" placeholder="https://...">
+          <button type="button" id="resetWebhook" class="btn btn-ghost btn-xs" style="margin-top:6px;">↺ Restaurar padrão</button>
+        </div>
+
+        <button type="button" id="testTargetBtn" class="btn btn-accent btn-sm" style="margin-top:4px;">🧪 Testar meta atingida</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- Hidden legacy (compat) -->
+    <div style="display:none !important;" id="liveSection">
+      <span id="liveSteps">0</span><span id="liveTarget">-</span>
+      <span id="calcSteps">0</span><span id="liveEstimated">-</span>
+    </div>
+    <div style="display:none;">
+      <button id="playPauseBtn"></button>
+      <button id="stopMonBtn"></button>
+      <span id="monSteps"></span><span id="monTotal"></span><span id="monEst"></span>
+      <div id="monBar"></div><div id="monStatus"></div>
+      <button id="toggleWebhook"></button>
+      <div id="webhookRow"></div>
+      <button id="applyImport"></button>
+      <div id="importHint"></div>
+      <button id="toggleCodeVisibility"></button>
+      <div id="shareCodeWrapper"></div>
+      <div id="shareSection"></div>
+    </div>
+
+  </div>
+
+  <script src="license.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

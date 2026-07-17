@@ -1,0 +1,21 @@
+{
+  "name": "zapo2",
+  "productName": "Zapo2",
+  "version": "1.0.0",
+  "description": "Zapo2 — WhatsApp Listener Standalone (notificações e envio locais)",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package:win": "npx electron-packager . Zapo2 --platform=win32 --arch=x64 --out=release --overwrite --icon=build/icon.ico --ignore=^/release"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "@electron/packager": "^18.3.5",
+    "electron-packager": "npm:@electron/packager@^18.3.5"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode": "^1.5.4",
+    "@puppeteer/browsers": "^2.4.0"
+  }
+}

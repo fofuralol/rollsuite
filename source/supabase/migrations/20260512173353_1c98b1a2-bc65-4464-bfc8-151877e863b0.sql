@@ -1,0 +1,1 @@
+ALTER TABLE public.wa_tasks ADD COLUMN IF NOT EXISTS operation_data jsonb NOT NULL DEFAULT '{}'::jsonb;

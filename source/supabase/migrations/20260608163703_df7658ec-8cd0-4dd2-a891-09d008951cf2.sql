@@ -1,0 +1,1 @@
+ALTER TABLE public.dkdash_turno_alert_state ADD COLUMN IF NOT EXISTS last_first_username text;

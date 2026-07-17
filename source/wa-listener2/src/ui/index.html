@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Zapo2</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #11131a;
+    --card: #181a23;
+    --card-2: #1f222b;
+    --secondary: #232630;
+    --border: #292c35;
+    --border-strong: #3a3e4a;
+    --input: #1f222b;
+    --fg: #f0ebe0;
+    --muted-fg: #a39d92;
+    --primary: #4ade80;
+    --primary-hover: #22c55e;
+    --primary-fg: #11131a;
+    --success: #22c55e;
+    --danger: #df4444;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 13px/1.35 system-ui, Segoe UI, sans-serif; background:
+    radial-gradient(1200px 600px at 50% -200px, rgba(74,222,128,0.10), transparent 70%),
+    var(--bg); color: var(--fg); display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ===== HEADER ===== */
+  header { flex: 0 0 auto; position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 6px 14px; background: linear-gradient(180deg, #1a1d27, var(--card)); border-bottom: 1px solid var(--border-strong); }
+  header img.logo { width: 38px; height: 38px; filter: drop-shadow(0 4px 12px rgba(74,222,128,.35)); }
+  header .titles { text-align: center; }
+  header h1 { font-size: 14px; margin: 0; font-weight: 900; letter-spacing: 2px; color: var(--primary); text-shadow: 0 0 14px rgba(74,222,128,.35); }
+  header h1 small { display: block; font-size: 9px; font-weight: 500; letter-spacing: 1px; color: var(--muted-fg); margin-top: 2px; text-shadow: none; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-fg); padding: 4px 10px; background: var(--card-2); border: 1px solid var(--border); border-radius: 999px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+  .dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .dot.starting, .dot.qr { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* ===== NAV ===== */
+  nav { flex: 0 0 auto; display: flex; gap: 4px; padding: 6px 12px; background: var(--card); border-bottom: 1px solid var(--border); }
+  nav button { background: transparent; color: var(--muted-fg); border: 1px solid transparent; padding: 5px 14px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; transition: all .15s ease; }
+  nav button:hover { color: var(--fg); background: var(--secondary); border-color: var(--border); }
+  nav button.active { background: linear-gradient(180deg, var(--primary), var(--primary-hover)); color: var(--primary-fg); font-weight: 800; border-color: var(--primary); box-shadow: 0 2px 12px rgba(74,222,128,.35), inset 0 1px 0 rgba(255,255,255,.2); }
+
+  /* ===== Titled panel ===== */
+  .panel { background: var(--card); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,.35); display: flex; flex-direction: column; min-height: 0; }
+  .panel-title { display: flex; align-items: center; justify-content: center; padding: 6px 10px; background: linear-gradient(180deg, #20232d, #1a1c25); border-bottom: 1px solid var(--border-strong); color: var(--primary); font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; flex: 0 0 auto; }
+  .panel-body { padding: 10px; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+  .panel-body > .row, .panel-body > div:not(#feed):not(#log) { flex: 0 0 auto; }
+  main { padding: 10px; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .tab { display: none; flex: 1; min-height: 0; }
+  .tab.active { display: flex; flex-direction: column; }
+  label { display: block; font-size: 11px; color: var(--muted-fg); margin: 6px 0 3px; }
+  input, textarea, select { width: 100%; background: var(--input); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); }
+  textarea { min-height: 48px; resize: vertical; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; min-width: 0; }
+  button.btn { background: var(--primary); color: var(--primary-fg); border: 0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
+  button.btn:hover { background: var(--primary-hover); }
+  button.btn.gray { background: var(--secondary); color: var(--fg); }
+  button.btn.gray:hover { background: var(--card-2); }
+  button.btn.red { background: var(--danger); color: #fff; }
+  button.btn.sm { padding: 3px 8px; font-size: 11px; }
+  button.icon { background: transparent; border: 0; color: var(--muted-fg); cursor: pointer; padding: 3px; border-radius: 4px; }
+  button.icon:hover { background: var(--secondary); color: var(--fg); }
+  .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .qr-box { display: flex; flex-direction: column; align-items: center; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+  .qr-box img { background: #fff; padding: 6px; border-radius: 4px; max-height: 220px; }
+  .qr-box p { color: var(--muted-fg); margin: 8px 0 0; text-align: center; font-size: 12px; }
+  #log { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px; flex: 1; min-height: 0; overflow: auto; font: 11px/1.35 ui-monospace, Consolas, monospace; }
+  .log-line { padding: 1px 4px; border-bottom: 1px solid var(--border); white-space: pre-wrap; word-break: break-word; }
+  .log-line.info { color: var(--fg); } .log-line.warn { color: var(--warn); } .log-line.error { color: #fca5a5; }
+  .log-line .ts { color: var(--muted-fg); margin-right: 6px; }
+  .hint { color: var(--muted-fg); font-size: 11px; margin: 4px 0 0; }
+
+  /* ===== Dashboard split ===== */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; flex: 1; min-height: 0; }
+
+  /* card mensagem (esquerda) */
+  .card-msg { background: var(--card); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 4px 18px rgba(0,0,0,.35); overflow: hidden; }
+  .card-msg::before { content: "Mensagem Recebida"; display: block; padding: 8px 12px; background: linear-gradient(180deg, #20232d, #1a1c25); border-bottom: 1px solid var(--border-strong); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; text-align: center; }
+  .card-msg .hd { display: flex; align-items: center; gap: 10px; margin: 12px 14px 10px; }
+  .card-msg .hd .bubble { width: 32px; height: 32px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 16px; }
+  .card-msg .hd .ttl { font-size: 10px; font-weight: 800; letter-spacing: .18em; color: var(--muted-fg); text-transform: uppercase; }
+  .card-msg .hd .sub { font-size: 15px; font-weight: 700; color: var(--fg); margin-top: 1px; }
+  .card-msg .hd .nav { margin-left: auto; display: flex; align-items: center; gap: 4px; color: var(--muted-fg); font-size: 11px; }
+  .card-msg .hd .nav .pg { font-family: ui-monospace, Consolas, monospace; min-width: 38px; text-align: center; color: var(--fg); }
+  .card-msg .hd .nav .hr { color: var(--muted-fg); margin-left: 8px; }
+  .card-msg .empty { color: var(--muted-fg); font-style: italic; text-align: center; padding: 40px 10px; }
+  .card-msg #dashBody { padding: 0 14px 14px; flex: 1; display: flex; flex-direction: column; }
+  .card-msg .body { background: var(--card-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .card-msg .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card-msg .meta .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,var(--primary),var(--primary-hover)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: var(--primary-fg); }
+  .card-msg .meta .autor { color: var(--primary); font-weight: 700; font-size: 13px; }
+  .card-msg .meta .tel { color: var(--muted-fg); font-size: 11px; }
+  .card-msg .meta .grupo { color: var(--muted-fg); font-size: 11px; }
+  .card-msg .meta .matched { background: var(--secondary); color: var(--primary); border-radius: 4px; padding: 1px 6px; font-size: 10px; }
+  .card-msg .meta .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .card-msg .pill { background: var(--primary); color: var(--primary-fg); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .card-msg .pill:hover { background: var(--primary-hover); }
+  .card-msg .matched-line { background: var(--secondary); color: var(--primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; align-self: flex-start; }
+  .card-msg .text { white-space: pre-wrap; word-break: break-word; font-size: 13px; color: var(--fg); line-height: 1.5; }
+
+  /* card chat (direita - template envio) */
+  /* card chat (direita - template envio) */
+  .card-chat { background: var(--card); border: 1px solid var(--border-strong); border-radius: 10px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+  .card-chat::before { content: "Envio de Template"; display: block; padding: 8px 12px; background: linear-gradient(180deg, #20232d, #1a1c25); border-bottom: 1px solid var(--border-strong); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; text-align: center; }
+  .chat-hd { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--card-2); border-bottom: 1px solid var(--border); }
+  .chat-hd .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg,var(--primary),var(--primary-hover)); display: flex; align-items: center; justify-content: center; color: var(--primary-fg); font-weight: 800; }
+  .chat-hd .who { line-height: 1.1; min-width: 0; flex: 1; }
+  .chat-hd .who .nm { font-weight: 700; color: var(--fg); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-hd .who .on { color: var(--primary); font-size: 11px; }
+  .chat-hd select { width: auto; flex: 1; min-width: 0; max-width: 100%; background: var(--input); border: 1px solid var(--border); padding: 4px 6px; font-size: 11px; color: var(--fg); }
+  .chat-hd .btn-disp { background: var(--primary); color: var(--primary-fg); }
+  .chat-hd .btn-disp:hover { background: var(--primary-hover); }
+  .chat-body { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; overflow: auto; background: var(--card-2); }
+  .tpl-bubble { background: var(--secondary); border: 1px solid var(--border); border-radius: 10px; border-top-right-radius: 4px; padding: 8px 10px; max-width: 88%; cursor: pointer; transition: transform .12s, box-shadow .12s; position: relative; }
+  .tpl-bubble:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.4); border-color: var(--primary); }
+  .tpl-bubble .pre { white-space: pre-wrap; word-break: break-word; font-size: 11.5px; color: var(--fg); line-height: 1.35; }
+  .tpl-bubble .time { font-size: 9px; color: var(--muted-fg); text-align: right; margin-top: 2px; }
+  .tpl-bubble .edit-hint { position: absolute; top: 6px; right: 8px; font-size: 10px; color: var(--muted-fg); opacity: 0; transition: opacity .12s; }
+  .tpl-bubble:hover .edit-hint { opacity: 1; }
+  .tpl-bubble .del { position: absolute; top: 6px; left: 8px; opacity: 0; transition: opacity .12s; background: rgba(0,0,0,.4); border: 0; color: #fca5a5; border-radius: 4px; padding: 2px 5px; font-size: 10px; cursor: pointer; }
+  .tpl-bubble:hover .del { opacity: 1; }
+  .tpl-empty { width: 100%; text-align: center; color: var(--muted-fg); font-style: italic; padding: 30px 10px; align-self: center; }
+  .chat-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--card-2); border-top: 1px solid var(--border); }
+  .chat-foot .input-fake { flex: 1; background: var(--input); border-radius: 22px; padding: 8px 14px; color: var(--muted-fg); font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid var(--border); }
+  .chat-foot .input-fake:hover { color: var(--fg); border-color: var(--primary); }
+  .chat-foot .send { background: var(--primary); color: var(--primary-fg); border: 0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 10px rgba(74,222,128,.4); }
+  .chat-foot .send:hover { background: var(--primary-hover); }
+  .chat-foot .send:disabled { background: var(--primary); color: var(--primary-fg); opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+  dialog { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 20px; max-width: 520px; width: 90%; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 12px; color: var(--primary); }
+
+  /* ===== Toast in-app (notificação em primeiro plano) ===== */
+  #toast { position: fixed; top: 16px; right: 16px; z-index: 9999; max-width: 360px;
+    background: linear-gradient(180deg, #134d3a, #0e3a2c);
+    border: 2px solid var(--primary); border-radius: 12px; padding: 12px 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 24px rgba(74,222,128,.45);
+    color: var(--fg); display: none; cursor: pointer;
+    animation: toastIn .25s ease-out;
+  }
+  #toast.show { display: block; }
+  #toast .t-hd { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color: var(--primary); margin-bottom:6px; }
+  #toast .t-hd .x { margin-left:auto; background: transparent; border:0; color: var(--muted-fg); cursor: pointer; font-size: 16px; padding: 0 4px; }
+  #toast .t-author { font-weight:700; color: var(--fg); font-size: 13px; }
+  #toast .t-group { color: var(--muted-fg); font-size: 11px; margin-bottom: 4px; }
+  #toast .t-body { font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: hidden; }
+  @keyframes toastIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body>
+<header>
+  <img src="icon.png" class="logo" alt="Zapo2" />
+  <div class="titles"><h1>ZAPO2<small>Standalone · Notificações + Envio locais</small></h1></div>
+  <div class="status"><div id="dot" class="dot"></div><span id="statusText">desconectado</span></div>
+</header>
+<nav>
+  <button data-tab="dash" class="active">Dashboard</button>
+  <button data-tab="messages">Histórico</button>
+  <button data-tab="config">Config</button>
+  <button data-tab="connection">Conexão</button>
+  <button data-tab="log">Log</button>
+  <button id="btnUpdate" class="btn sm" style="margin-left:auto;">↻ Buscar atualizações</button>
+</nav>
+<main>
+
+  <!-- DASHBOARD: split cards -->
+  <section id="tab-dash" class="tab active">
+    <div class="split">
+      <!-- card mensagem recebida -->
+      <div class="card-msg">
+        <div class="hd">
+          <div class="bubble">💬</div>
+          <div>
+            <div class="ttl">WhatsApp</div>
+            <div class="sub">Última mensagem</div>
+          </div>
+          <div class="nav">
+            <button class="icon" id="dashPrev" title="Anterior">‹</button>
+            <span class="pg" id="dashPg">0/0</span>
+            <button class="icon" id="dashNext" title="Próxima">›</button>
+            <span class="hr" id="dashTime"></span>
+          </div>
+        </div>
+        <div id="dashBody"></div>
+      </div>
+
+      <!-- card chat envio template -->
+      <div class="card-chat">
+        <div class="chat-hd">
+          <div class="avatar" id="dashChatAv">D</div>
+          <div class="who">
+            <div class="nm" id="dashChatNm">Escolha um grupo</div>
+            <div class="on" id="dashChatOn">offline</div>
+          </div>
+          <select id="dashChatSelect" title="Trocar grupo"><option value="">— grupo —</option></select>
+          <button class="btn sm" id="dashReloadChats" title="Atualizar lista">↻</button>
+        </div>
+        <div class="chat-body" id="dashChatBody"></div>
+        <div class="chat-foot">
+          <button class="icon" id="dashNewTpl" title="Novo template">＋</button>
+          <button class="btn sm gray" id="dashPromoBtn" title="Promoção (aplica % alternativa se montante ≥ 400)" style="white-space:nowrap;">Promo</button>
+          <div class="input-fake" id="dashSendCurrent">📌 Clique num template para enviar…</div>
+          <button class="send" id="dashSendBtn" title="Enviar template selecionado" disabled>➤</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- HISTÓRICO -->
+  <section id="tab-messages" class="tab">
+    <div class="panel">
+      <div class="panel-title">Histórico de Mensagens</div>
+      <div class="panel-body">
+        <div class="actions" style="margin:0 0 10px;">
+          <button class="btn gray sm" id="btnReloadMsgs">Recarregar</button>
+          <button class="btn red sm" id="btnClearMsgs">Limpar tudo</button>
+          <span id="msgCount" class="hint" style="margin-left:auto;align-self:center;"></span>
+        </div>
+        <div id="feed" style="display:grid;gap:8px;flex:1;min-height:0;overflow:auto;padding-right:4px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONFIG -->
+  <section id="tab-config" class="tab">
+    <div class="panel">
+      <div class="panel-title">Configuração</div>
+      <div class="panel-body">
+        <div class="row">
+          <div>
+            <label>Grupos monitorados (um por linha — match por substring)</label>
+            <textarea id="groups" placeholder="Ex.: Pix Recebimentos"></textarea>
+          </div>
+          <div>
+            <label>Palavras-chave (uma por linha — vazio = tudo dos grupos)</label>
+            <textarea id="keywords" placeholder="pix\ndeposito"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div><label><input type="checkbox" id="notify" style="width:auto;margin-right:6px;"/>Notificação do Windows ao receber</label></div>
+          <div><label><input type="checkbox" id="sound" style="width:auto;margin-right:6px;"/>Som ao receber</label></div>
+        </div>
+        <div class="row">
+          <div><label><input type="checkbox" id="inAppNotify" style="width:auto;margin-right:6px;"/>Notificar no app (traz janela pra frente + toast)</label></div>
+          <div></div>
+        </div>
+        <div>
+          <label>Som da notificação</label>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <select id="soundType" style="flex:1; min-width:160px;">
+              <option value="system">Padrão do sistema</option>
+              <option value="beep">Beep curto</option>
+              <option value="ding">Ding</option>
+              <option value="chime">Chime (2 tons)</option>
+              <option value="alert">Alerta (3 bips)</option>
+              <option value="pop">Pop</option>
+            </select>
+            <button class="btn gray sm" type="button" data-test-sound="beep">▶ Beep</button>
+            <button class="btn gray sm" type="button" data-test-sound="ding">▶ Ding</button>
+            <button class="btn gray sm" type="button" data-test-sound="chime">▶ Chime</button>
+            <button class="btn gray sm" type="button" data-test-sound="alert">▶ Alerta</button>
+            <button class="btn gray sm" type="button" data-test-sound="pop">▶ Pop</button>
+          </div>
+        </div>
+        <div class="row">
+          <div><label><input type="checkbox" id="narrate" style="width:auto;margin-right:6px;"/>Narrar mensagem (linha da palavra-chave)</label></div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn gray sm" type="button" id="btnTestNarrate">▶ Testar narração</button>
+          </div>
+        </div>
+        <div class="row" style="flex:0 0 auto;">
+          <div style="flex:1;">
+            <label>Mensagem de teste (simula recebimento — toca som e narra se ativados)</label>
+            <textarea id="testMsg" rows="3" placeholder="Ex.: Pix recebido no valor de 100 reais" style="flex:0 0 auto; height:70px; min-height:70px;"></textarea>
+          </div>
+        </div>
+        <div class="actions"><button class="btn gray sm" type="button" id="btnSendTestMsg">▶ Enviar teste</button></div>
+        <div class="actions"><button class="btn" id="btnSave">Salvar</button></div>
+        <p class="hint">Dados em <code>wa-listener2-data\config.json</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONEXÃO -->
+  <section id="tab-connection" class="tab">
+    <div class="panel">
+      <div class="panel-title">Conexão WhatsApp</div>
+      <div class="panel-body">
+        <div class="qr-box" id="qrBox">
+          <p id="qrMsg">Clique em "Iniciar" pra gerar o QR Code.</p>
+          <img id="qrImg" style="display:none" />
+        </div>
+        <div class="actions">
+          <button class="btn" id="btnStart">Iniciar</button>
+          <button class="btn gray" id="btnStop">Parar</button>
+          <button class="btn red" id="btnLogout">Logout (limpar sessão)</button>
+        </div>
+        <p class="hint">Sessão fica salva — só escaneia o QR uma vez. Use número secundário.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section id="tab-log" class="tab">
+    <div class="panel">
+      <div class="panel-title">Log do Sistema</div>
+      <div class="panel-body">
+        <div class="actions" style="margin: 0 0 8px;"><button class="btn gray sm" id="btnClearLog">Limpar log</button></div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Dialog template -->
+<dialog id="tplDialog">
+  <h3 id="tplDialogTitle">Novo template</h3>
+  <input type="hidden" id="tpl_id" />
+  <label>Texto da mensagem</label>
+  <textarea id="tpl_texto" style="min-height:320px;"></textarea>
+  <div class="actions">
+    <button class="btn" id="btnTplSave">Salvar</button>
+    <button class="btn gray" id="btnTplCancel">Cancelar</button>
+    <button class="btn red" id="btnTplDelete" style="margin-left:auto;">Excluir</button>
+  </div>
+</dialog>
+
+<!-- Confirm close dialog -->
+<dialog id="closeDialog">
+  <h3>O que você deseja fazer?</h3>
+  <p style="color:var(--muted-fg); font-size:12px; margin:0 0 14px;">
+    Você pode fechar o Zapo2 completamente ou deixá-lo rodando em segundo plano na bandeja do sistema.
+  </p>
+  <div class="actions" style="justify-content:flex-end;">
+    <button class="btn gray" id="btnCloseCancel">Cancelar</button>
+    <button class="btn gray" id="btnCloseQuit">Fechar aplicativo</button>
+    <button class="btn" id="btnCloseMin">Minimizar para bandeja</button>
+  </div>
+</dialog>
+
+<!-- Toast in-app -->
+<div id="toast" title="Clique para fechar">
+  <div class="t-hd">🔔 Zapo2 <button class="x" id="toastClose" title="Fechar">×</button></div>
+  <div class="t-author" id="toastAuthor"></div>
+  <div class="t-group" id="toastGroup"></div>
+  <div class="t-body" id="toastBody"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s||"").replace(/[<>&]/g, (c)=>({ '<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+document.querySelectorAll("nav button[data-tab]").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button[data-tab]").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $("tab-" + b.dataset.tab).classList.add("active");
+    if (b.dataset.tab === "dash") refreshChats();
+  };
+});
+
+// ----- config -----
+async function loadCfg() {
+  const c = await window.api.getCfg();
+  $("groups").value = c.groups || "";
+  $("keywords").value = c.keywords || "";
+  $("notify").checked = c.notify !== "0";
+  $("sound").checked = c.sound !== "0";
+  $("soundType").value = c.soundType || "system";
+  $("narrate").checked = c.narrate === "1";
+  $("inAppNotify").checked = c.inAppNotify !== "0";
+}
+$("btnSave").onclick = async () => {
+  await window.api.setCfg({
+    groups: $("groups").value, keywords: $("keywords").value,
+    notify: $("notify").checked ? "1" : "0", sound: $("sound").checked ? "1" : "0",
+    soundType: $("soundType").value,
+    narrate: $("narrate").checked ? "1" : "0",
+    inAppNotify: $("inAppNotify").checked ? "1" : "0",
+  });
+  $("btnSave").textContent = "Salvo ✓";
+  setTimeout(() => $("btnSave").textContent = "Salvar", 1200);
+};
+
+// ----- toast in-app -----
+let _toastTimer = null;
+function showToast(m) {
+  if (!$("inAppNotify").checked) return;
+  $("toastAuthor").textContent = m.autor || "(?)";
+  $("toastGroup").textContent = m.grupo ? "· " + m.grupo : "";
+  $("toastBody").textContent = (m.mensagem || "").slice(0, 280);
+  const t = $("toast");
+  t.classList.add("show");
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove("show"), 8000);
+}
+$("toastClose").onclick = (e) => { e.stopPropagation(); $("toast").classList.remove("show"); };
+$("toast").onclick = () => $("toast").classList.remove("show");
+
+
+// ----- conexão -----
+$("btnStart").onclick = () => window.api.waStart();
+$("btnStop").onclick = () => window.api.waStop();
+$("btnLogout").onclick = async () => { if (confirm("Remover sessão?")) await window.api.waLogout(); };
+
+function applyState(s) {
+  $("dot").className = "dot " + s.status;
+  $("statusText").textContent = s.status;
+  if (s.status === "qr" && s.qr) { $("qrImg").src = s.qr; $("qrImg").style.display = "block"; $("qrMsg").textContent = "Escaneie no WhatsApp → Aparelhos conectados"; }
+  else if (s.status === "connected") { $("qrImg").style.display = "none"; $("qrMsg").textContent = "Conectado ✓ " + (s.info?.wid || ""); }
+  else if (s.status === "starting") { $("qrImg").style.display = "none"; $("qrMsg").textContent = "Iniciando…"; }
+  else { $("qrImg").style.display = "none"; $("qrMsg").textContent = "Desconectado."; }
+}
+
+// ----- logs -----
+function renderLog(l) {
+  const el = document.createElement("div");
+  el.className = "log-line " + l.level;
+  const t = new Date(l.ts).toLocaleTimeString();
+  el.innerHTML = `<span class="ts">${t}</span>${esc(l.msg)}`;
+  const log = $("log"); log.appendChild(el); log.scrollTop = log.scrollHeight;
+}
+$("btnClearLog").onclick = async () => { await window.api.clearLogs(); $("log").innerHTML = ""; };
+
+// ============ ESTADO GLOBAL ============
+let MESSAGES = [];
+let TEMPLATES = [];
+let CHATS = [];
+let dashIdx = 0;
+let selectedTplId = null;
+
+// ----- mensagens -----
+async function loadMessages() {
+  MESSAGES = await window.api.listMessages();
+  if (dashIdx > Math.max(0, MESSAGES.length - 1)) dashIdx = 0;
+  renderDashMsg();
+  if (typeof TEMPLATES !== "undefined" && TEMPLATES.length) renderDashChat();
+  renderFeed();
+}
+
+function renderFeed() {
+  const feed = $("feed");
+  $("msgCount").textContent = MESSAGES.length + " mensagem(ns)";
+  if (!MESSAGES.length) { feed.innerHTML = `<div style="text-align:center;color:#5a8d77;padding:40px 12px;font-style:italic;">Sem mensagens.</div>`; return; }
+  feed.innerHTML = MESSAGES.map((m) => {
+    const dt = new Date(m.ts).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+    const matched = (m.matched||[]).map((p)=>`<span style="background:#134d3a;color:#d1fae5;border-radius:3px;padding:1px 5px;font-size:10px;">${esc(p)}</span>`).join(" ");
+    return `<div style="background:#08291f;border:1px solid #134d3a;border-radius:8px;padding:10px 12px;" data-id="${esc(m.id)}">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11px;color:#8fc7ad;">
+        <span style="color:#4ade80;font-weight:700;font-size:13px;">${esc(m.autor||"?")}</span>
+        ${m.telefone?`<span>${esc(m.telefone)}</span>`:""}
+        <span>· ${esc(m.grupo)} · ${dt}</span> ${matched}
+      </div>
+      <div style="margin-top:6px;white-space:pre-wrap;word-break:break-word;font-size:13px;">${esc(m.mensagem)}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="btn gray sm" data-act="copy">Copiar</button>
+        <button class="btn red sm" data-act="remove">Remover</button>
+      </div>
+    </div>`;
+  }).join("");
+  feed.querySelectorAll("[data-id]").forEach((el) => {
+    const id = el.dataset.id; const m = MESSAGES.find((x)=>x.id===id);
+    el.querySelector('[data-act="copy"]').onclick = () => navigator.clipboard.writeText(m.mensagem);
+    el.querySelector('[data-act="remove"]').onclick = async () => { await window.api.removeMessage(id); loadMessages(); };
+  });
+}
+$("btnReloadMsgs").onclick = loadMessages;
+$("btnClearMsgs").onclick = async () => { if (confirm("Apagar todo o histórico?")) { await window.api.clearMessages(); loadMessages(); } };
+
+// ============ DASHBOARD MENSAGEM (esquerda) ============
+function initials(s) { return String(s||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "?"; }
+
+function renderDashMsg() {
+  const total = MESSAGES.length;
+  $("dashPg").textContent = total ? `${dashIdx+1}/${total}` : "0/0";
+  const m = MESSAGES[dashIdx];
+  if (!m) {
+    $("dashTime").textContent = "";
+    $("dashBody").innerHTML = `<div class="empty">Sem mensagens ainda.<br/>Inicie a conexão e configure grupos/palavras-chave.</div>`;
+    return;
+  }
+  const d = new Date(m.ts);
+  $("dashTime").textContent = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const matched = (m.matched||[]).map(p=>`<span class="matched">${esc(p)}</span>`).join(" ");
+  $("dashBody").innerHTML = `
+    <div class="body">
+      <div class="meta">
+        <div class="avatar">${esc(initials(m.autor))}</div>
+        <div style="min-width:0;">
+          <div class="autor">${esc(m.autor||"?")}</div>
+          <div class="grupo">${esc(m.grupo||"")}</div>
+        </div>
+        <div class="right">
+          ${matched}
+          <button class="icon" id="dashCopy" title="Copiar">📋</button>
+          <button class="icon" id="dashDel" title="Remover" style="color:#fca5a5;">🗑️</button>
+        </div>
+      </div>
+      ${m.telefone?`<div style="font-size:11px;color:#9ee0bf;">${esc(m.telefone)}</div>`:""}
+      <div class="text">${esc(m.mensagem)}</div>
+    </div>`;
+  $("dashCopy").onclick = () => navigator.clipboard.writeText(m.mensagem);
+  $("dashDel").onclick = async () => { await window.api.removeMessage(m.id); loadMessages(); };
+}
+
+$("dashPrev").onclick = () => { if (dashIdx < MESSAGES.length - 1) { dashIdx++; renderDashMsg(); renderDashChat(); } };
+$("dashNext").onclick = () => { if (dashIdx > 0) { dashIdx--; renderDashMsg(); renderDashChat(); } };
+
+// ============ DASHBOARD CHAT (direita) ============
+async function refreshChats() {
+  const sel = $("dashChatSelect");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">— carregando… —</option>`;
+  const r = await window.api.listChats();
+  if (!r.ok) { sel.innerHTML = `<option value="">erro: ${esc(r.error||"")}</option>`; CHATS = []; return; }
+  CHATS = r.chats;
+  sel.innerHTML = `<option value="">— escolha o grupo/contato —</option>` +
+    CHATS.sort((a,b)=>(b.isGroup?1:0)-(a.isGroup?1:0) || a.name.localeCompare(b.name))
+      .map((c)=>`<option value="${esc(c.id)}">${c.isGroup?"👥 ":"👤 "}${esc(c.name)}</option>`).join("");
+  if (cur) sel.value = cur;
+  updateChatHd();
+}
+$("dashChatSelect").onchange = updateChatHd;
+$("dashReloadChats").onclick = refreshChats;
+
+function updateChatHd() {
+  const id = $("dashChatSelect").value;
+  const c = CHATS.find(x=>x.id===id);
+  if (c) {
+    $("dashChatNm").textContent = c.name;
+    $("dashChatAv").textContent = initials(c.name);
+    $("dashChatOn").textContent = c.isGroup ? "grupo" : "contato";
+  } else {
+    $("dashChatNm").textContent = "Escolha um grupo";
+    $("dashChatAv").textContent = "?";
+    $("dashChatOn").textContent = "offline";
+  }
+  updateSendState();
+}
+
+async function loadTemplates() {
+  TEMPLATES = await window.api.listTemplates();
+  renderDashChat();
+}
+
+function parseBRNum(s) {
+  if (s == null) return 0;
+  const cleaned = String(s).replace(/[^\d.,]/g, "");
+  // se tem vírgula, ponto é separador de milhar
+  if (cleaned.includes(",")) return parseFloat(cleaned.replace(/\./g,"").replace(",",".")) || 0;
+  // sem vírgula: trata ponto como separador de milhar se 3 dígitos depois
+  if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) return parseFloat(cleaned.replace(/\./g,"")) || 0;
+  return parseFloat(cleaned) || 0;
+}
+function fmtBR(v) {
+  if (v == null || !isFinite(v)) return "";
+  return Number.isInteger(v)
+    ? v.toLocaleString("pt-BR")
+    : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function extractMontante(txt) {
+  if (!txt) return null;
+  const s = String(txt);
+  // 1) "montante" seguido de número
+  let m = s.match(/montante[^\d\-]*([\d.,]+)/i);
+  if (m) { const v = parseBRNum(m[1]); if (v > 0) return v; }
+  // 2) R$ X
+  m = s.match(/R\$\s*([\d.,]+)/i);
+  if (m) { const v = parseBRNum(m[1]); if (v > 0) return v; }
+  // 3) primeiro número >= 50
+  const all = s.match(/\b\d{1,3}(?:\.\d{3})*(?:,\d+)?\b|\b\d+(?:,\d+)?\b/g) || [];
+  for (const n of all) { const v = parseBRNum(n); if (v >= 50) return v; }
+  return null;
+}
+let PROMO = { active: false, percent: 0.20 };
+function computeFromMsg(msg) {
+  const montante = extractMontante(msg);
+  if (!montante) return { montante: "", valor20: "", contas: "" };
+  const eff = (PROMO.active && montante >= 400) ? PROMO.percent : 0.20;
+  const valor20 = Math.round(montante * eff * 100) / 100;
+  const contas = Math.floor(montante / 200);
+  return { montante: fmtBR(montante), valor20: fmtBR(valor20), contas: String(contas), contasNum: contas };
+}
+function applyComputedFallback(text, c) {
+  if (!c?.montante) return text;
+  const contasLabel = c.contasNum === 1 ? "conta" : "contas";
+  return String(text || "")
+    .replace(/(🔸\s*Montante:\s*)([^\n]+)/iu, `$1${c.montante}`)
+    .replace(/(💸\s*Valor:\s*R\$\s*)([^\n]+)/iu, `$1${c.valor20}`)
+    .replace(/(📊\s*Até\s*)(\d+)(\s+conta(?:s)?)/iu, `$1${c.contas} ${contasLabel}`);
+}
+function tplToText(t, msgText) {
+  const c = computeFromMsg(msgText);
+  const raw = (t.texto||"")
+    .replaceAll("{nome}", t.nome||"")
+    .replaceAll("{chave}", t.chave||"")
+    .replaceAll("{banco}", t.banco||"")
+    .replaceAll("{tipo}", t.tipo||"")
+    .replaceAll("{montante}", c.montante)
+    .replaceAll("{valor20}", c.valor20)
+    .replaceAll("{contas}", c.contas)
+    .replaceAll("{novalinha}", "\n");
+  return applyComputedFallback(raw, c);
+}
+
+function renderDashChat() {
+  const body = $("dashChatBody");
+  if (!TEMPLATES.length) {
+    body.innerHTML = `<div class="tpl-empty">Nenhum template. Clique em ＋ pra criar um modelo de mensagem PIX.</div>`;
+    selectedTplId = null;
+    updateSendState();
+    return;
+  }
+  if (!TEMPLATES.find(t=>t.id===selectedTplId)) selectedTplId = TEMPLATES[0]?.id || null;
+  const now = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const curMsg = MESSAGES[dashIdx]?.mensagem || "";
+  body.innerHTML = TEMPLATES.map((t) => {
+    const text = tplToText(t, curMsg);
+    const isSel = t.id === selectedTplId;
+    return `<div class="tpl-bubble" data-id="${esc(t.id)}" style="${isSel?'box-shadow:0 0 0 2px #4ade80;':''}">
+      <button class="del" data-act="del" title="Excluir">🗑</button>
+      <span class="edit-hint">✏ clique p/ editar</span>
+      <div class="pre">${esc(text)}</div>
+      <div class="time">${now} ✓✓</div>
+    </div>`;
+  }).join("");
+  body.querySelectorAll(".tpl-bubble").forEach((el) => {
+    const id = el.dataset.id;
+    el.onclick = (e) => {
+      if (e.target.closest('[data-act="del"]')) return;
+      // duplo clique = editar; clique simples = selecionar
+      if (selectedTplId === id) {
+        openTplDialog(TEMPLATES.find(t=>t.id===id));
+      } else {
+        selectedTplId = id;
+        renderDashChat();
+      }
+    };
+    el.querySelector('[data-act="del"]').onclick = async (e) => {
+      e.stopPropagation();
+      if (confirm("Excluir template?")) { await window.api.removeTemplate(id); if (selectedTplId===id) selectedTplId=null; loadTemplates(); }
+    };
+  });
+  updateSendState();
+}
+
+function updateSendState() {
+  const hasChat = !!$("dashChatSelect").value;
+  const hasTpl = !!selectedTplId;
+  $("dashSendBtn").disabled = !(hasChat && hasTpl);
+  const t = TEMPLATES.find(x=>x.id===selectedTplId);
+  $("dashSendCurrent").textContent = t ? `📌 ${t.nome||"(sem nome)"} · ${t.banco||""}` : "📌 Clique num template para enviar…";
+  $("dashSendCurrent").onclick = () => { if (t) openTplDialog(t); };
+}
+
+$("dashSendBtn").onclick = async () => {
+  const chat_id = $("dashChatSelect").value;
+  const t = TEMPLATES.find(x=>x.id===selectedTplId);
+  if (!chat_id || !t) return;
+  const curMsg = MESSAGES[dashIdx]?.mensagem || "";
+  const text = tplToText(t, curMsg);
+  $("dashSendBtn").disabled = true;
+  const r = await window.api.sendMessage({ chat_id, text });
+  if (r.ok) { $("dashSendBtn").textContent = "✓"; setTimeout(()=>{ $("dashSendBtn").textContent = "➤"; updateSendState(); }, 1200); }
+  else { alert("Falha: " + (r.error||"")); updateSendState(); }
+};
+
+$("dashNewTpl").onclick = () => openTplDialog(null);
+
+function updatePromoBtn() {
+  const btn = $("dashPromoBtn");
+  if (PROMO.active) {
+    btn.textContent = Math.round(PROMO.percent * 100) + "%";
+    btn.classList.remove("gray");
+  } else {
+    btn.textContent = "Promo";
+    btn.classList.add("gray");
+  }
+}
+async function askPercent(def) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement("dialog");
+    dlg.style.cssText = "padding:16px;border-radius:10px;border:1px solid #292c35;background:#181a23;color:#f0ebe0;min-width:280px;";
+    dlg.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">% da promoção</div>
+      <div style="font-size:12px;opacity:.75;margin-bottom:10px;">Aplicada apenas quando montante ≥ 400</div>
+      <input id="__promoInput" type="number" step="0.01" min="0.01" max="99.99" value="${def}" style="width:100%;padding:8px;border-radius:6px;border:1px solid #292c35;background:#1f222b;color:#f0ebe0;margin-bottom:12px;" />
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="__promoCancel" class="btn sm gray">Cancelar</button>
+        <button id="__promoOk" class="btn sm">OK</button>
+      </div>`;
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    const input = dlg.querySelector("#__promoInput");
+    input.focus(); input.select();
+    const done = (val) => { try { dlg.close(); } catch {} dlg.remove(); resolve(val); };
+    dlg.querySelector("#__promoOk").onclick = () => done(input.value);
+    dlg.querySelector("#__promoCancel").onclick = () => done(null);
+    input.onkeydown = (e) => { if (e.key === "Enter") done(input.value); if (e.key === "Escape") done(null); };
+  });
+}
+$("dashPromoBtn").onclick = async () => {
+  if (PROMO.active) {
+    PROMO.active = false;
+  } else {
+    const def = String(Math.round(PROMO.percent * 100));
+    const v = await askPercent(def);
+    if (v == null) return;
+    const n = parseFloat(String(v).replace(",", "."));
+    if (!isFinite(n) || n <= 0 || n >= 100) { alert("% inválida"); return; }
+    PROMO.percent = n / 100;
+    PROMO.active = true;
+  }
+  updatePromoBtn();
+  if (typeof renderDashChat === "function") renderDashChat();
+};
+updatePromoBtn();
+
+function openTplDialog(t) {
+  $("tplDialogTitle").textContent = t ? "Editar template" : "Novo template";
+  $("tpl_id").value = t?.id || "";
+  $("tpl_texto").value = t?.texto || "📌 PIX CELULAR\n\n💠 {chave}\n\n🏷️ {nome}\n\n━━━━━━━━━━━━━━━\n\n🔸 Montante: {montante}\n\n💸 Valor: R$ {valor20}\n\n📊 Até {contas} contas\n\n━━━━━━━━━━━━━━━\n\n⚡ Envio após confirmação do pagamento\n\n📩 Envie o comprovante para dar continuidade\n\n⚠️ Montante alto feito em apenas uma conta, será feito vários depósitos até atingir o valor total";
+  $("btnTplDelete").style.display = t ? "inline-block" : "none";
+  $("tplDialog").showModal();
+}
+$("btnTplCancel").onclick = (e) => { e.preventDefault(); $("tplDialog").close(); };
+$("btnTplDelete").onclick = async (e) => {
+  e.preventDefault();
+  const id = $("tpl_id").value;
+  if (id && confirm("Excluir template?")) { await window.api.removeTemplate(id); $("tplDialog").close(); loadTemplates(); }
+};
+$("btnTplSave").onclick = async (e) => {
+  e.preventDefault();
+  const saved = await window.api.saveTemplate({
+    id: $("tpl_id").value || undefined,
+    texto: $("tpl_texto").value,
+  });
+  if (saved?.id) selectedTplId = saved.id;
+  $("tplDialog").close();
+  loadTemplates();
+};
+
+// ----- update (frontend + .exe nativo num só botão) -----
+window.api.onNativeProgress?.((p) => {
+  const btn = $("btnUpdate");
+  if (!btn || !btn.disabled) return;
+  if (p.phase === "download") btn.textContent = `⬇ baixando .exe ${p.pct}%`;
+  else if (p.phase === "ready") btn.textContent = "instalando .exe…";
+});
+
+$("btnUpdate").onclick = async () => {
+  const btn = $("btnUpdate"); const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Buscando…";
+  try {
+    const r = await window.api.applyAllUpdates();
+    if (!r.ok) { alert("Falha: " + (r.error || "desconhecida")); btn.textContent = orig; btn.disabled = false; return; }
+    if (r.action === "native-swap") {
+      btn.textContent = "App atualizado! reiniciando…";
+      // o swap-update.vbs já encerra o processo e relança o novo .exe
+      return;
+    }
+    if (r.action === "restart") {
+      btn.textContent = "Frontend atualizado! reiniciando…";
+      setTimeout(async () => { await window.api.restartApp(); }, 600);
+      return;
+    }
+    if (r.action === "reload") {
+      btn.textContent = "Frontend atualizado! recarregando…";
+      setTimeout(async () => { await window.api.reloadApp(); }, 600);
+      return;
+    }
+    btn.textContent = "✓ tudo atualizado";
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+  } catch (e) { alert("Erro: " + e.message); btn.textContent = orig; btn.disabled = false; }
+};
+
+// ----- sons -----
+let _audioCtx = null;
+function audioCtx() { if (!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return _audioCtx; }
+function tone(freq, dur, type="sine", gain=0.25, delay=0) {
+  const ctx = audioCtx();
+  const t0 = ctx.currentTime + delay;
+  const osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.type = type; osc.frequency.value = freq;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+function playSound(kind) {
+  try {
+    switch (kind) {
+      case "beep":  tone(880, 0.15, "square", 0.2); break;
+      case "ding":  tone(1568, 0.4, "sine", 0.3); tone(2093, 0.5, "sine", 0.15, 0.05); break;
+      case "chime": tone(659, 0.25, "sine", 0.25); tone(988, 0.5, "sine", 0.25, 0.15); break;
+      case "alert": tone(1000, 0.12, "square", 0.25); tone(1000, 0.12, "square", 0.25, 0.18); tone(1000, 0.12, "square", 0.25, 0.36); break;
+      case "pop":   tone(440, 0.08, "triangle", 0.3); tone(880, 0.06, "triangle", 0.2, 0.05); break;
+    }
+  } catch (e) { console.warn("sound:", e); }
+}
+document.querySelectorAll("[data-test-sound]").forEach((b) => {
+  b.onclick = () => playSound(b.dataset.testSound);
+});
+
+// ----- narração -----
+function escapeRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function extractMatchingLines(mensagem, matched) {
+  if (!matched || !matched.length) return mensagem || "";
+  const lines = String(mensagem||"").split(/\r?\n/);
+  const hits = lines.filter((line) => matched.some((p) => {
+    if (!p) return false;
+    const re = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escapeRegex(p)}(?=$|[^\\p{L}\\p{N}_])`, "iu");
+    return re.test(line);
+  }));
+  return (hits.length ? hits : lines).join(". ").trim();
+}
+function stripLinks(text) {
+  return String(text||"")
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "")
+    .replace(/\b[\w.-]+\.(?:com|net|org|io|br|co|gg|me|app|dev|xyz|info|tv|live|site|online|store|link)(?:\/\S*)?/gi, "")
+    .replace(/\s{2,}/g, " ").trim();
+}
+function speak(text) {
+  try {
+    const synth = window.speechSynthesis;
+    const clean = stripLinks(text);
+    if (!synth || !clean) return;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = "pt-BR"; u.rate = 1; u.pitch = 1;
+    const voices = synth.getVoices();
+    const v = voices.find((v) => /pt[-_]BR/i.test(v.lang) && /female|fem|maria|luciana|joana|francisca|helena/i.test(v.name))
+      || voices.find((v) => /pt[-_]BR/i.test(v.lang))
+      || voices.find((v) => /pt/i.test(v.lang));
+    if (v) u.voice = v;
+    synth.speak(u);
+  } catch {}
+}
+try { window.speechSynthesis?.getVoices(); } catch {}
+
+$("btnTestNarrate").onclick = () => {
+  speak("Teste de narração. Pix recebido no valor de cem reais.");
+};
+
+$("btnSendTestMsg").onclick = async () => {
+  const msg = $("testMsg").value.trim();
+  if (!msg) { alert("Digite uma mensagem de teste."); return; }
+  // Salva config primeiro pra garantir que o detector use as keywords/groups atuais
+  await window.api.setCfg({
+    groups: $("groups").value,
+    keywords: $("keywords").value,
+    notify: $("notify").checked ? "1" : "0",
+    sound: $("sound").checked ? "1" : "0",
+    soundType: $("soundType").value,
+    narrate: $("narrate").checked ? "1" : "0",
+    inAppNotify: $("inAppNotify").checked ? "1" : "0",
+  });
+  // Injeta como se fosse uma mensagem real do grupo — main process detecta keywords,
+  // salva no histórico e dispara msg-new (que recarrega dashboard e narra).
+  await window.api.testMessage({ text: msg, autor: "Teste", grupo: "Teste local" });
+};
+
+
+
+window.api.onState(applyState);
+window.api.onLog(renderLog);
+window.api.onMessage(async (m) => {
+  dashIdx = 0; // sempre mostra a mensagem nova
+  await loadMessages();
+  renderDashChat(); // garante que o modelo recalcula com a nova mensagem
+  if (m) showToast(m);
+  if ($("sound").checked) {
+    const t = $("soundType").value;
+    if (t && t !== "system") playSound(t);
+  }
+  if ($("narrate").checked && m) {
+    setTimeout(() => speak(extractMatchingLines(m.mensagem, m.matched || [])), 450);
+  }
+});
+
+// ----- Confirm close dialog -----
+const closeDlg = $("closeDialog");
+$("btnCloseCancel").onclick = () => closeDlg.close();
+$("btnCloseQuit").onclick = () => { closeDlg.close(); window.api.closeAction("quit"); };
+$("btnCloseMin").onclick = () => { closeDlg.close(); window.api.closeAction("minimize"); };
+window.api.onConfirmClose(() => { if (!closeDlg.open) closeDlg.showModal(); });
+
+
+(async () => {
+  await loadCfg();
+  applyState(await window.api.waState());
+  (await window.api.logs()).forEach(renderLog);
+  await loadMessages();
+  await loadTemplates();
+  refreshChats();
+})();
+</script>
+</body>
+</html>

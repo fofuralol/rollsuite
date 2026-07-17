@@ -44,8 +44,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   waState: () => ipcRenderer.invoke("wa:state"),
   waConfigGet: () => ipcRenderer.invoke("wa:config-get"),
   waConfigSet: (patch) => ipcRenderer.invoke("wa:config-set", patch),
-  waForwardTest: (text) => ipcRenderer.invoke("wa:forward-test", text),
-  waForwardCard: (msg) => ipcRenderer.invoke("wa:forward-card", msg),
   waReadLog: () => ipcRenderer.invoke("wa:read-log"),
   waClearLog: () => ipcRenderer.invoke("wa:clear-log"),
   waDiagnostics: () => ipcRenderer.invoke("wa:diagnostics"),

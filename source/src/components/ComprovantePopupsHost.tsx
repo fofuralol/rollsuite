@@ -231,19 +231,21 @@ function PopupItem({ item, index, total, isMyTurn, passarVez, hasTurno }: { item
             <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Abrir
           </Button>
         )}
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-9 rounded-full flex-1 min-w-0 text-xs font-medium px-2"
-          disabled={!hasTurno || !isMyTurn || skipping}
-          onClick={async () => {
-            setSkipping(true);
-            try { await passarVez(); } finally { setSkipping(false); }
-          }}
-          title={!hasTurno ? "Fila de turno vazia" : (isMyTurn ? "Passar a vez no turno" : "Não é a sua vez")}
-        >
-          <SkipForward className="w-3.5 h-3.5 mr-1.5" /> Passar vez
-        </Button>
+        {hasTurno && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-full flex-1 min-w-0 text-xs font-medium px-2"
+            disabled={!isMyTurn || skipping}
+            onClick={async () => {
+              setSkipping(true);
+              try { await passarVez(); } finally { setSkipping(false); }
+            }}
+            title={isMyTurn ? "Passar a vez no turno" : "Não é a sua vez"}
+          >
+            <SkipForward className="w-3.5 h-3.5 mr-1.5" /> Passar vez
+          </Button>
+        )}
         <Button
           size="sm"
           className="h-9 rounded-full px-4 text-xs font-semibold shrink-0"

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Zapo</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, Segoe UI, sans-serif; background: #06231a; color: #e6f4ec; }
+  header { display: flex; align-items: center; gap: 20px; padding: 18px 22px; background: linear-gradient(90deg, #0b3d2e, #0e5237); border-bottom: 1px solid #134d3a; }
+  header img.logo { width: 140px; height: 140px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); }
+  header .titles { display: flex; flex-direction: column; line-height: 1.1; }
+  header h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: 1px; color: #fff; }
+  header h1 small { display: block; font-size: 12px; font-weight: 500; color: #9ee0bf; margin-top: 2px; letter-spacing: .3px; }
+  .status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c8efd9; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #6b7280; }
+  .dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+  .dot.starting, .dot.qr { background: #f59e0b; }
+  .dot.error { background: #ef4444; }
+  nav { display: flex; gap: 4px; padding: 8px 12px; background: #08291f; border-bottom: 1px solid #134d3a; }
+  nav button { background: transparent; color: #8fc7ad; border: 0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit; }
+  nav button.active { background: #16a34a; color: #fff; }
+  main { padding: 16px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  label { display: block; font-size: 12px; color: #8fc7ad; margin: 10px 0 4px; }
+  input, textarea { width: 100%; background: #08291f; color: #e6f4ec; border: 1px solid #134d3a; border-radius: 6px; padding: 8px 10px; font: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: #22c55e; }
+  textarea { min-height: 80px; resize: vertical; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button.btn { background: #16a34a; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 600; }
+  button.btn:hover { background: #15803d; }
+  button.btn.gray { background: #1f4e3d; }
+  button.btn.gray:hover { background: #2a6650; }
+  button.btn.red { background: #b91c1c; }
+  button.btn.green { background: #22c55e; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .qr-box { display: flex; flex-direction: column; align-items: center; padding: 20px; background: #08291f; border: 1px solid #134d3a; border-radius: 8px; }
+  .qr-box img { background: #fff; padding: 8px; border-radius: 4px; }
+  .qr-box p { color: #8fc7ad; margin: 12px 0 0; text-align: center; }
+  #log { background: #08291f; border: 1px solid #134d3a; border-radius: 6px; padding: 8px; height: 460px; overflow: auto; font: 12px/1.4 ui-monospace, Consolas, monospace; }
+  .log-line { padding: 2px 4px; border-bottom: 1px solid #0d3527; white-space: pre-wrap; word-break: break-word; }
+  .log-line.info { color: #d1fae5; }
+  .log-line.warn { color: #fbbf24; }
+  .log-line.error { color: #fca5a5; }
+  .log-line .ts { color: #5a8d77; margin-right: 6px; }
+  .hint { color: #5a8d77; font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <img src="icon.png" class="logo" alt="Zapo" />
+  <div class="titles"><h1>ZAPO<small>WhatsApp Listener</small></h1></div>
+  <div class="status"><div id="dot" class="dot"></div><span id="statusText">desconectado</span></div>
+</header>
+<nav>
+  <button data-tab="config" class="active">Config</button>
+  <button data-tab="connection">Conexão</button>
+  <button data-tab="log">Log</button>
+  <button id="btnUpdate" style="margin-left:auto;background:#15803d;color:#fff;font-weight:600;">↻ Buscar atualizações</button>
+</nav>
+<main>
+  <section id="tab-config" class="tab active">
+    <label>Webhook URL</label>
+    <input id="webhook_url" placeholder="https://seu-projeto.supabase.co/functions/v1/whatsapp-webhook" />
+    <label>Token (x-webhook-token)</label>
+    <input id="token" placeholder="cole o token gerado no painel web" />
+    <div class="row">
+      <div>
+        <label>Grupos monitorados (um por linha — match por substring no nome)</label>
+        <textarea id="groups" placeholder="Ex.: Pix Recebimentos\nGrupo Vendas"></textarea>
+      </div>
+      <div>
+        <label>Palavras-chave (uma por linha — vazio = enviar tudo dos grupos)</label>
+        <textarea id="keywords" placeholder="pix\ndeposito\nrecebido"></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn green" id="btnSave">Salvar</button>
+      <button class="btn gray" id="btnTest">Testar webhook</button>
+    </div>
+    <p class="hint">Os dados ficam em <code>wa-listener-data/config.json</code> ao lado do .exe.</p>
+  </section>
+
+  <section id="tab-connection" class="tab">
+    <div class="qr-box" id="qrBox">
+      <p id="qrMsg">Clique em "Iniciar" pra gerar o QR Code.</p>
+      <img id="qrImg" style="display:none" />
+    </div>
+    <div class="actions">
+      <button class="btn green" id="btnStart">Iniciar</button>
+      <button class="btn gray" id="btnStop">Parar</button>
+      <button class="btn red" id="btnLogout">Logout (limpar sessão)</button>
+    </div>
+    <p class="hint">Sessão fica salva — só precisa escanear o QR uma vez. Use um número secundário.</p>
+  </section>
+
+  <section id="tab-log" class="tab">
+    <div class="actions" style="margin: 0 0 8px;">
+      <button class="btn gray" id="btnClearLog">Limpar log</button>
+    </div>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $("tab-" + b.dataset.tab).classList.add("active");
+  };
+});
+
+async function loadCfg() {
+  const c = await window.api.getCfg();
+  $("webhook_url").value = c.webhook_url || "";
+  $("token").value = c.token || "";
+  $("groups").value = c.groups || "";
+  $("keywords").value = c.keywords || "";
+}
+$("btnSave").onclick = async () => {
+  await window.api.setCfg({
+    webhook_url: $("webhook_url").value.trim(),
+    token: $("token").value.trim(),
+    groups: $("groups").value,
+    keywords: $("keywords").value,
+  });
+  $("btnSave").textContent = "Salvo ✓";
+  setTimeout(() => $("btnSave").textContent = "Salvar", 1200);
+};
+$("btnTest").onclick = async () => {
+  await window.api.setCfg({
+    webhook_url: $("webhook_url").value.trim(),
+    token: $("token").value.trim(),
+  });
+  const r = await window.api.testWebhook();
+  alert(r.ok ? `OK [${r.status}]\n${r.body}` : `Falhou: ${r.error || r.status}\n${r.body || ""}`);
+};
+
+$("btnStart").onclick = () => window.api.waStart();
+$("btnStop").onclick = () => window.api.waStop();
+$("btnLogout").onclick = async () => { if (confirm("Remover sessão do WhatsApp?")) await window.api.waLogout(); };
+
+function applyState(s) {
+  const dot = $("dot"); dot.className = "dot " + s.status;
+  $("statusText").textContent = s.status;
+  if (s.status === "qr" && s.qr) {
+    $("qrImg").src = s.qr; $("qrImg").style.display = "block";
+    $("qrMsg").textContent = "Escaneie no WhatsApp → Aparelhos conectados";
+  } else if (s.status === "connected") {
+    $("qrImg").style.display = "none";
+    $("qrMsg").textContent = "Conectado ✓ " + (s.info?.wid || "");
+  } else if (s.status === "starting") {
+    $("qrImg").style.display = "none";
+    $("qrMsg").textContent = "Iniciando…";
+  } else {
+    $("qrImg").style.display = "none";
+    $("qrMsg").textContent = "Desconectado.";
+  }
+}
+
+function renderLog(l) {
+  const el = document.createElement("div");
+  el.className = "log-line " + l.level;
+  const t = new Date(l.ts).toLocaleTimeString();
+  el.innerHTML = `<span class="ts">${t}</span>${l.msg.replace(/[<>&]/g, (c)=>({ '<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}`;
+  const log = $("log");
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+$("btnClearLog").onclick = async () => { await window.api.clearLogs(); $("log").innerHTML = ""; };
+
+window.api.onState(applyState);
+
+$("btnUpdate").onclick = async () => {
+  const btn = $("btnUpdate");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Buscando…";
+  try {
+    const r = await window.api.checkUpdate();
+    if (!r.ok) { alert("Falha: " + (r.error || "desconhecida")); btn.textContent = orig; btn.disabled = false; return; }
+    if (!r.updated) { btn.textContent = "✓ já atualizado"; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500); return; }
+    if (r.needsRestart) {
+      btn.textContent = "Atualizado! reiniciando…";
+      setTimeout(async () => { await window.api.restartApp(); }, 600);
+    } else {
+      btn.textContent = "Atualizado! recarregando…";
+      setTimeout(async () => { await window.api.reloadApp(); }, 600);
+    }
+  } catch (e) { alert("Erro: " + e.message); btn.textContent = orig; btn.disabled = false; }
+};
+window.api.onLog(renderLog);
+
+(async () => {
+  await loadCfg();
+  applyState(await window.api.waState());
+  const ls = await window.api.logs();
+  ls.forEach(renderLog);
+})();
+</script>
+</body>
+</html>
