@@ -475,6 +475,35 @@ export function useWhatsApp() {
           try { console.log("[wa-forward] enviando", msg.id); } catch {}
           forwardWaMessage(msg);
         }).catch((e) => { try { console.warn("[wa-forward] import fail", e); } catch {} });
+
+        // Reencaminha via WhatsApp para números configurados
+        try {
+          if (!msg.is_comprovante && hasMatchedKeywords(msg)) {
+            let raw = "";
+            try { raw = localStorage.getItem("wa_forward_numbers") || ""; } catch {}
+            const numbers = raw
+              .split(/[\n,;]/)
+              .map((n) => n.replace(/\D/g, ""))
+              .filter((n) => n.length >= 8);
+            if (numbers.length && api?.waSendNow) {
+              const header = msg.grupo
+                ? `📣 ${msg.grupo} · ${msg.autor || msg.telefone || ""}`
+                : `📣 ${msg.autor || msg.telefone || "WhatsApp"}`;
+              const matchedLine = Array.isArray(msg.matched) && msg.matched.length
+                ? `🔑 ${msg.matched.join(", ")}`
+                : "";
+              const body = (msg.mensagem || "").slice(0, 1500);
+              const text = [header, matchedLine, "", body].filter(Boolean).join("\n");
+              for (const n of numbers) {
+                api.waSendNow({ chat_id: `${n}@c.us`, quoted_msg_id: "", text })
+                  .then((r: any) => { if (r?.error) console.warn("[wa-forward-number]", n, r.error); })
+                  .catch((e: any) => console.warn("[wa-forward-number] fail", n, e));
+              }
+              try { console.log("[wa-forward-number] enviado para", numbers.length, "número(s)"); } catch {}
+            }
+          }
+        } catch (e) { try { console.warn("[wa-forward-number] erro", e); } catch {} }
+
       }) || null;
     }
 
