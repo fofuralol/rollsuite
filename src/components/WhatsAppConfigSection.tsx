@@ -271,6 +271,25 @@ export default function WhatsAppConfigSection() {
           >
             Salvar números
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-full gap-1"
+            onClick={async () => {
+              const api = (window as any).electronAPI;
+              if (!api?.waForwardTest) { toast.error("Recurso indisponível"); return; }
+              const r = await api.waForwardTest("Teste de reencaminhamento do RollsSuite");
+              const data = r?.data;
+              if (!data) { toast.error(r?.error?.message || "Falha no teste"); return; }
+              if (data.error) { toast.error(data.error); return; }
+              const ok = (data.deliveries || []).filter((d: any) => d.ok).length;
+              const fail = (data.deliveries || []).filter((d: any) => !d.ok);
+              if (fail.length === 0) toast.success(`Enviado para ${ok} número(s)`);
+              else toast.error(`Falha em ${fail.length}: ${fail.map((f: any) => `${f.num} (${f.error || "erro"})`).join(" · ")}`);
+            }}
+          >
+            <Play className="w-3 h-3" /> Testar reencaminhamento
+          </Button>
         </div>
       )}
 

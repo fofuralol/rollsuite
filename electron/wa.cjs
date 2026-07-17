@@ -1418,28 +1418,84 @@ function parseForwardNumbers(raw) {
     .split(/[\s,;\n]+/)
     .map((s) => s.replace(/\D+/g, ""))
     .filter((n) => n.length >= 8)
-    .map((n) => `${n}@c.us`);
+    .map((n) => {
+      // Se veio sem DDI (10 ou 11 dígitos = número BR), prefixa 55
+      if (n.length === 10 || n.length === 11) n = "55" + n;
+      return n;
+    });
+}
+function brVariants(num) {
+  // Gera variantes BR com/sem o 9º dígito para celulares (55 + DDD + 9?xxxxxxxx)
+  const out = new Set([num]);
+  const m = /^55(\d{2})(\d{8,9})$/.exec(num);
+  if (m) {
+    const ddd = m[1]; const rest = m[2];
+    if (rest.length === 9 && rest.startsWith("9")) out.add(`55${ddd}${rest.slice(1)}`);
+    else if (rest.length === 8) out.add(`55${ddd}9${rest}`);
+  }
+  return Array.from(out);
+}
+async function resolveWaId(num) {
+  const variants = brVariants(num);
+  for (const v of variants) {
+    try {
+      if (typeof waClient?.getNumberId === "function") {
+        const id = await waClient.getNumberId(v);
+        if (id?._serialized) return id._serialized;
+      }
+    } catch (e) {
+      debugLog("forward getNumberId erro", { num: v, error: String(e?.message || e) });
+    }
+  }
+  // fallback: usa o formato original — pode falhar se número não estiver no WhatsApp
+  return `${num}@c.us`;
 }
 async function forwardMatchedMessage(msg, body, chat, matched) {
   const cfg = getConfig();
-  const targets = parseForwardNumbers(cfg?.forward_numbers);
-  if (targets.length === 0) return;
-  if (!waClient) return;
+  const nums = parseForwardNumbers(cfg?.forward_numbers);
+  debugLog("forward inicio", { raw: cfg?.forward_numbers, nums, hasClient: !!waClient, state: waState?.status });
+  if (nums.length === 0) return;
+  if (!waClient || waState?.status !== "connected") { debugLog("forward sem waClient/desconectado", { state: waState?.status }); return; }
   const header = `↪️ Encaminhado (${matched.join(", ")})\n👤 ${chat?.name || ""}\n\n`;
-  for (const chatId of targets) {
+  for (const num of nums) {
+    const chatId = await resolveWaId(num);
     try {
-      if (msg.hasMedia) {
+      if (msg && msg.hasMedia) {
         const media = await msg.downloadMedia().catch(() => null);
         if (media) {
           await waClient.sendMessage(chatId, media, { caption: header + (body || "") });
+          debugLog("forward ok (media)", { chatId });
           continue;
         }
       }
       await waClient.sendMessage(chatId, header + (body || ""));
+      debugLog("forward ok", { chatId });
     } catch (e) {
       debugLog("forward erro", { chatId, error: String(e?.message || e) });
     }
   }
+}
+
+async function testForward(text) {
+  const cfg = getConfig();
+  const nums = parseForwardNumbers(cfg?.forward_numbers);
+  const result = { raw: cfg?.forward_numbers || "", nums, hasClient: !!waClient, state: waState?.status, deliveries: [] };
+  if (!waClient || waState?.status !== "connected") { result.error = "WhatsApp desconectado"; return result; }
+  if (nums.length === 0) { result.error = "Nenhum número configurado"; return result; }
+  const header = `↪️ Teste de reencaminhamento\n\n`;
+  const body = String(text || "Mensagem de teste do RollsSuite");
+  for (const num of nums) {
+    const chatId = await resolveWaId(num);
+    const item = { num, chatId };
+    try {
+      await waClient.sendMessage(chatId, header + body);
+      item.ok = true;
+    } catch (e) {
+      item.ok = false; item.error = String(e?.message || e);
+    }
+    result.deliveries.push(item);
+  }
+  return result;
 }
 
 // ============ Backfill de mensagens antigas ============
@@ -2104,4 +2160,4 @@ async function sendReaction(payload) {
   throw new Error("Não foi possível reagir à mensagem (Reaction API indisponível).");
 }
 
-module.exports = { init, startWa, stopWa, logoutWa, getState, getConfig, setConfig, setSendState, getDiagnostics, listGroups, sendNow, sendReaction, backfillHistory, setRawListener, setRawReactionListener, setLiveChatEnabled };
+module.exports = { init, startWa, stopWa, logoutWa, getState, getConfig, setConfig, setSendState, getDiagnostics, listGroups, sendNow, sendReaction, backfillHistory, setRawListener, setRawReactionListener, setLiveChatEnabled, testForward };
