@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// Build manifest of dist/ and upload everything to rolls-updates bucket.
+// Build manifest of dist/ and publish everything into the repository updates/ folder.
+// After running this script, commit/push updates/ to GitHub; the app reads updates from GitHub raw URLs.
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const BUCKET = "rolls-updates";
 const DIST = path.resolve(__dirname, "..", "dist");
+const UPDATES_DIR = path.resolve(__dirname, "..", "..", "updates");
 
 function assertDesktopBundle() {
   const assetsDir = path.join(DIST, "assets");
@@ -24,8 +22,6 @@ function assertDesktopBundle() {
     throw new Error("dist atual parece build web, não desktop. Rode: VITE_TARGET=desktop npx vite build");
   }
 }
-
-if (!SUPABASE_URL || !SERVICE_KEY) { console.error("Missing env"); process.exit(1); }
 
 function walk(dir, base = "") {
   const out = [];
@@ -49,22 +45,13 @@ function mime(p) {
   })[ext] || "application/octet-stream";
 }
 
-async function upload(rel, buf, contentType) {
-  const url = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${rel}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      apikey: SERVICE_KEY,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-    },
-    body: buf,
-  });
-  if (!r.ok) throw new Error(`upload ${rel}: ${r.status} ${await r.text()}`);
+function copyToUpdates(rel, buf) {
+  const dest = path.join(UPDATES_DIR, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, buf);
 }
 
-(async () => {
+(() => {
   if (!fs.existsSync(DIST)) { console.error("No dist/ — build first"); process.exit(1); }
   assertDesktopBundle();
   const files = walk(DIST);
@@ -73,13 +60,15 @@ async function upload(rel, buf, contentType) {
   fs.writeFileSync(path.join(DIST, "version.txt"), version);
   fs.writeFileSync(path.join(DIST, "manifest.json"), JSON.stringify(manifest, null, 2));
 
-  console.log(`Uploading ${files.length + 2} files (version ${version})…`);
+  if (fs.existsSync(UPDATES_DIR)) fs.rmSync(UPDATES_DIR, { recursive: true, force: true });
+  fs.mkdirSync(UPDATES_DIR, { recursive: true });
+  console.log(`Publishing ${files.length + 2} files to updates/ (version ${version})…`);
   for (const f of files) {
     const buf = fs.readFileSync(f.abs);
-    await upload(f.rel, buf, mime(f.rel));
+    copyToUpdates(f.rel, buf, mime(f.rel));
     process.stdout.write(".");
   }
-  await upload("version.txt", Buffer.from(version), "text/plain");
-  await upload("manifest.json", Buffer.from(JSON.stringify(manifest, null, 2)), "application/json");
-  console.log(`\nDone. Version ${version}`);
-})().catch((e) => { console.error(e); process.exit(1); });
+  copyToUpdates("version.txt", Buffer.from(version), "text/plain");
+  copyToUpdates("manifest.json", Buffer.from(JSON.stringify(manifest, null, 2)), "application/json");
+  console.log(`\nDone. Commit/push updates/ to GitHub. Version ${version}`);
+})();
