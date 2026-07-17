@@ -332,7 +332,10 @@ function validateAppDir(dir) {
     if (!fs.existsSync(indexPath)) return { ok: false, reason: "index.html ausente" };
     const html = fs.readFileSync(indexPath, "utf8");
     const refs = [];
-    for (const match of html.matchAll(/\b(?:src|href)=["']\.\/([^"']+\.(?:js|css))["']/g)) refs.push(match[1]);
+    for (const match of html.matchAll(/\b(?:src|href)=["'](?:\.\/|\/)?([^"']+\.(?:js|css))(?:\?[^"']*)?["']/g)) {
+      const rel = String(match[1] || "").replace(/^[\/]+/, "").replace(/\.\./g, "");
+      if (rel) refs.push(rel);
+    }
     if (!refs.length) return { ok: false, reason: "index.html sem JS/CSS" };
     const missing = refs.filter((rel) => !fs.existsSync(path.join(dir, rel.replace(/\//g, path.sep))));
     if (missing.length) return { ok: false, reason: `assets ausentes: ${missing.join(", ")}` };
