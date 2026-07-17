@@ -461,16 +461,20 @@ export function useWhatsApp() {
       offWa = api?.onWaMessage?.((msg: WaMessage) => {
         if (!active) return;
         handleIncoming(msg);
-        if (!msg.is_comprovante && !seenIds.current.has(msg.id + "_pushed")) {
-          seenIds.current.add(msg.id + "_pushed");
-          let forwardOn = true;
-          try { forwardOn = localStorage.getItem("wa_forward_enabled") !== "false"; } catch {}
-          if (forwardOn) {
-            import("@/integrations/desktop/pushForward").then(({ forwardWaMessage }) => {
-              forwardWaMessage(msg);
-            }).catch(() => {});
-          }
+        if (msg.is_comprovante) return;
+        const pushedKey = (msg.id || `${msg.source_msg_id || ""}:${msg.source_chat_id || ""}:${msg.mensagem || ""}`) + "_pushed";
+        if (seenIds.current.has(pushedKey)) return;
+        let forwardOn = true;
+        try { forwardOn = localStorage.getItem("wa_forward_enabled") !== "false"; } catch {}
+        if (!forwardOn) {
+          try { console.log("[wa-forward] desativado pelo toggle; msg ignorada", msg.id); } catch {}
+          return;
         }
+        seenIds.current.add(pushedKey);
+        import("@/integrations/desktop/pushForward").then(({ forwardWaMessage }) => {
+          try { console.log("[wa-forward] enviando", msg.id); } catch {}
+          forwardWaMessage(msg);
+        }).catch((e) => { try { console.warn("[wa-forward] import fail", e); } catch {} });
       }) || null;
     }
 
