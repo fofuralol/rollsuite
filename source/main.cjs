@@ -187,7 +187,7 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
 }
 ipcMain.handle("extension:generate", (e, payload) => extGenerate(e.sender, payload || {}));
 
-const UPDATE_BASE = "https://pmwevrhnoxnbcuslkeid.supabase.co/storage/v1/object/public/rolls-updates";
+const UPDATE_BASE = "https://raw.githubusercontent.com/fofuralol/rollsuite/main/updates";
 const NATIVE_BASE = `${UPDATE_BASE}/native`;
 
 const APP_USER_MODEL_ID = "com.rollssuite.desktop";
