@@ -463,9 +463,13 @@ export function useWhatsApp() {
         handleIncoming(msg);
         if (!msg.is_comprovante && !seenIds.current.has(msg.id + "_pushed")) {
           seenIds.current.add(msg.id + "_pushed");
-          import("@/integrations/desktop/pushForward").then(({ forwardWaMessage }) => {
-            forwardWaMessage(msg);
-          }).catch(() => {});
+          let forwardOn = true;
+          try { forwardOn = localStorage.getItem("wa_forward_enabled") !== "false"; } catch {}
+          if (forwardOn) {
+            import("@/integrations/desktop/pushForward").then(({ forwardWaMessage }) => {
+              forwardWaMessage(msg);
+            }).catch(() => {});
+          }
         }
       }) || null;
     }
