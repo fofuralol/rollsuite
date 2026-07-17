@@ -8,6 +8,7 @@ const URL = import.meta.env.VITE_SUPABASE_URL as string;
 const KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 const ENABLED_KEY = "monitor_push_forward_enabled";
+const WA_FORWARD_ENABLED_KEY = "wa_forward_enabled";
 const USER_ID_KEY = "monitor_push_forward_user_id";
 const WA_TOKEN_KEY = "monitor_push_forward_wa_token";
 
@@ -19,6 +20,10 @@ const nickToEmail = (n: string) => {
 
 export function isPushForwardEnabled(): boolean {
   try { return localStorage.getItem(ENABLED_KEY) === "1"; } catch { return false; }
+}
+
+export function isWaForwardEnabled(): boolean {
+  try { return localStorage.getItem(WA_FORWARD_ENABLED_KEY) !== "false"; } catch { return true; }
 }
 
 export function getPushForwardUserId(): string | null {
@@ -129,7 +134,10 @@ export async function forwardWaMessage(msg: {
   source_chat_id?: string;
   source_author_id?: string;
 }) {
-  if (!isPushForwardEnabled()) return;
+  if (!isWaForwardEnabled()) {
+    try { console.log("[pushForward] reencaminhamento desativado nas configurações do WhatsApp"); } catch {}
+    return;
+  }
   if (!URL || !KEY) return;
 
   const title = msg.autor ? `WhatsApp · ${msg.autor}` : "WhatsApp";
