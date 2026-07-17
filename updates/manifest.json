@@ -1,5 +1,6 @@
 {
-  "version": "20260717033000",
+  "version": "20260717033547",
+  "generatedAt": "2026-07-17T03:35:47Z",
   "files": [
     "assets/Auth-DVrfAkHX.js",
     "assets/CalculadoraPage-Dlzd-gRe.js",
@@ -34,7 +35,6 @@
     "gb-v2.8.zip",
     "gb-v2.9.zip",
     "index.html",
-    "manifest.json",
     "manifest.webmanifest",
     "monitor-icon.png",
     "placeholder.svg",
