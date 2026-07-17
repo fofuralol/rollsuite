@@ -79,6 +79,16 @@ async function forwardConfiguredWaMessage(message: WaMessage) {
   if (!IS_DESKTOP || message.is_comprovante || !hasMatchedKeywords(message)) return;
   const api = (window as any).electronAPI;
   if (!api) return;
+
+  const config = await api.waConfigGet?.().catch(() => null);
+  const enabledRaw = config?.data?.forward_enabled;
+  const enabled = typeof enabledRaw === "boolean"
+    ? enabledRaw
+    : typeof enabledRaw === "string"
+      ? enabledRaw !== "false"
+      : true;
+  if (!enabled) return;
+
   if (api.waForwardCard) {
     try { await api.waForwardCard(message); return; } catch {}
   }
@@ -93,7 +103,6 @@ async function forwardConfiguredWaMessage(message: WaMessage) {
     }
   }
 
-  const config = await api.waConfigGet?.().catch(() => null);
   const nums = parseForwardNumbers(config?.data?.forward_numbers);
   if (!nums.length || !api.waSendNow) return;
 
