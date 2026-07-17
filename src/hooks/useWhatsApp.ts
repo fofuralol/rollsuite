@@ -65,6 +65,47 @@ function hasMatchedKeywords(message: WaMessage) {
   return Array.isArray(message.matched) && message.matched.some((value) => String(value || "").trim().length > 0);
 }
 
+const forwardedCardKeys = new Set<string>();
+
+function parseForwardNumbers(raw: unknown) {
+  return String(raw || "")
+    .split(/[\s,;\n]+/)
+    .map((value) => value.replace(/\D+/g, ""))
+    .filter((value) => value.length >= 8)
+    .map((value) => (value.length === 10 || value.length === 11 ? `55${value}` : value));
+}
+
+async function forwardConfiguredWaMessage(message: WaMessage) {
+  if (!IS_DESKTOP || message.is_comprovante || !hasMatchedKeywords(message)) return;
+  const api = (window as any).electronAPI;
+  if (!api) return;
+  if (api.waForwardCard) {
+    try { await api.waForwardCard(message); return; } catch {}
+  }
+
+  const key = String(message.source_msg_id || message.id || message.mensagem || "").trim();
+  if (key) {
+    if (forwardedCardKeys.has(key)) return;
+    forwardedCardKeys.add(key);
+    if (forwardedCardKeys.size > 1000) {
+      const first = forwardedCardKeys.values().next().value;
+      if (first) forwardedCardKeys.delete(first);
+    }
+  }
+
+  const config = await api.waConfigGet?.().catch(() => null);
+  const nums = parseForwardNumbers(config?.data?.forward_numbers);
+  if (!nums.length || !api.waSendNow) return;
+
+  const matched = Array.isArray(message.matched) ? message.matched.filter(Boolean).join(", ") : "";
+  const text = `↪️ Encaminhado (${matched})\n👤 ${message.grupo || ""}\n\n${message.mensagem || ""}`;
+  for (const num of nums) {
+    try {
+      await api.waSendNow({ chat_id: num, fallback_phone: num, text });
+    } catch {}
+  }
+}
+
 function uniqKeywords(rows: WaKeyword[]) {
   const seen = new Set<string>();
   const out: WaKeyword[] = [];
@@ -442,7 +483,7 @@ export function useWhatsApp() {
           if (!active) return;
           handleIncoming(msg);
           if (IS_DESKTOP && !msg.is_comprovante) {
-            try { (window as any).electronAPI?.waForwardCard?.(msg); } catch {}
+            forwardConfiguredWaMessage(msg).catch(() => {});
           }
         })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "wa_messages", filter: `user_id=eq.${userId}` }, (payload) => {
@@ -465,7 +506,7 @@ export function useWhatsApp() {
         if (!active) return;
         handleIncoming(msg);
         if (!msg.is_comprovante) {
-          try { api?.waForwardCard?.(msg); } catch {}
+          forwardConfiguredWaMessage(msg).catch(() => {});
         }
         if (!msg.is_comprovante && !seenIds.current.has(msg.id + "_pushed")) {
           seenIds.current.add(msg.id + "_pushed");
