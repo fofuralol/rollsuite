@@ -30,6 +30,17 @@ export default function WhatsAppConfigSection() {
   const [metaToken, setMetaToken] = useState<string>("");
   const [proofTtlMin, setProofTtlMin] = useState<number>(30);
   const [proofTtlDirty, setProofTtlDirty] = useState(false);
+  const [forwardEnabled, setForwardEnabledState] = useState<boolean>(() => {
+    try { return localStorage.getItem("wa_forward_enabled") !== "false"; } catch { return true; }
+  });
+
+  const toggleForward = (val: boolean) => {
+    setForwardEnabledState(val);
+    try { localStorage.setItem("wa_forward_enabled", val ? "true" : "false"); } catch {}
+    try { window.dispatchEvent(new StorageEvent("storage", { key: "wa_forward_enabled", newValue: val ? "true" : "false" })); } catch {}
+    toast.success(val ? "Reencaminhamento de mensagens ativado" : "Reencaminhamento de mensagens desativado");
+  };
+  
   
 
   useEffect(() => {
@@ -124,6 +135,17 @@ export default function WhatsAppConfigSection() {
         <Switch checked={liveChatEnabled} onCheckedChange={setLiveChatEnabled} />
       </div>
 
+      {/* Reencaminhamento de mensagens */}
+      <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-sky-300">Reencaminhamento de mensagens</div>
+          <div className="text-[11px] text-muted-foreground">
+            Quando desligado, este PC não reencaminha mensagens do WhatsApp para outros dispositivos.
+          </div>
+        </div>
+        <Switch checked={forwardEnabled} onCheckedChange={toggleForward} />
+      </div>
+
       {/* Listener antigo */}
       <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
@@ -134,6 +156,7 @@ export default function WhatsAppConfigSection() {
         </div>
         <Switch checked={oldEnabled} onCheckedChange={toggleOldListener} />
       </div>
+
 
       {/* Webhook */}
       <div className="space-y-1.5">
