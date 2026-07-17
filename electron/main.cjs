@@ -1204,6 +1204,10 @@ ipcMain.handle("wa:forward-test", async (_e, text) => {
   try { return { data: await wa.testForward(text || ""), error: null }; }
   catch (e) { return { data: null, error: { message: String(e?.message || e) } }; }
 });
+ipcMain.handle("wa:forward-card", async (_e, msg) => {
+  try { return { data: await wa.forwardCardMessage(msg || {}), error: null }; }
+  catch (e) { return { data: null, error: { message: String(e?.message || e) } }; }
+});
 ipcMain.handle("wa:diagnostics", () => ({ data: wa.getDiagnostics(), error: null }));
 ipcMain.handle("wa:set-live-chat", (_e, enabled) => { try { wa.setLiveChatEnabled(!!enabled); } catch {} return { data: true, error: null }; });
 ipcMain.handle("wa:list-groups", async () => {

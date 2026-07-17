@@ -1409,10 +1409,12 @@ async function handleMessage(msg, onNewMessage) {
   debugLog("OK: notificando", { autor: inserted?.autor, matched, t_total_ms: tTotal });
   try { onNewMessage?.(inserted); } catch {}
   try { queuePushMessage(inserted); } catch (e) { console.error("[wa] queuePushMessage", e.message); }
-  try { await forwardMatchedMessage(msg, body, chat, matched); } catch (e) { debugLog("forward falhou", { error: String(e?.message || e) }); }
+  try { await forwardMatchedMessage(msg, body, chat, matched, sourceMsgId); } catch (e) { debugLog("forward falhou", { error: String(e?.message || e) }); }
 }
 
 // ============ Reencaminhamento p/ número configurado ============
+const forwardedMessageKeys = new Set();
+
 function parseForwardNumbers(raw) {
   return String(raw || "")
     .split(/[\s,;\n]+/)
@@ -1450,12 +1452,21 @@ async function resolveWaId(num) {
   // fallback: usa o formato original — pode falhar se número não estiver no WhatsApp
   return `${num}@c.us`;
 }
-async function forwardMatchedMessage(msg, body, chat, matched) {
+async function forwardMatchedMessage(msg, body, chat, matched, dedupeKey) {
   const cfg = getConfig();
   const nums = parseForwardNumbers(cfg?.forward_numbers);
   debugLog("forward inicio", { raw: cfg?.forward_numbers, nums, hasClient: !!waClient, state: waState?.status });
   if (nums.length === 0) return;
   if (!waClient || waState?.status !== "connected") { debugLog("forward sem waClient/desconectado", { state: waState?.status }); return; }
+  const key = String(dedupeKey || msg?.id?._serialized || body || "").trim();
+  if (key) {
+    if (forwardedMessageKeys.has(key)) { debugLog("forward ignorado: duplicado", { key }); return; }
+    forwardedMessageKeys.add(key);
+    if (forwardedMessageKeys.size > 1000) {
+      const first = forwardedMessageKeys.values().next().value;
+      if (first) forwardedMessageKeys.delete(first);
+    }
+  }
   const header = `↪️ Encaminhado (${matched.join(", ")})\n👤 ${chat?.name || ""}\n\n`;
   for (const num of nums) {
     const chatId = await resolveWaId(num);
@@ -1474,6 +1485,20 @@ async function forwardMatchedMessage(msg, body, chat, matched) {
       debugLog("forward erro", { chatId, error: String(e?.message || e) });
     }
   }
+}
+
+async function forwardCardMessage(row) {
+  const body = String(row?.mensagem || row?.body || "");
+  const matched = Array.isArray(row?.matched) ? row.matched : [];
+  const dedupeKey = row?.source_msg_id || row?.id || body;
+  const chat = { name: row?.grupo || row?.chatName || "" };
+  let msg = null;
+  const sourceMsgId = row?.source_msg_id || row?.sourceMsgId || "";
+  if (sourceMsgId && waClient && waState?.status === "connected") {
+    try { msg = await waClient.getMessageById(sourceMsgId); } catch (e) { debugLog("forward card: getMessageById falhou", { sourceMsgId, error: String(e?.message || e) }); }
+  }
+  await forwardMatchedMessage(msg, body, chat, matched, dedupeKey);
+  return { ok: true };
 }
 
 async function testForward(text) {
@@ -2160,4 +2185,4 @@ async function sendReaction(payload) {
   throw new Error("Não foi possível reagir à mensagem (Reaction API indisponível).");
 }
 
-module.exports = { init, startWa, stopWa, logoutWa, getState, getConfig, setConfig, setSendState, getDiagnostics, listGroups, sendNow, sendReaction, backfillHistory, setRawListener, setRawReactionListener, setLiveChatEnabled, testForward };
+module.exports = { init, startWa, stopWa, logoutWa, getState, getConfig, setConfig, setSendState, getDiagnostics, listGroups, sendNow, sendReaction, backfillHistory, setRawListener, setRawReactionListener, setLiveChatEnabled, testForward, forwardCardMessage };
