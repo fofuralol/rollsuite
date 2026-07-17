@@ -1,17 +1,13 @@
 #!/usr/bin/env node
-// Empacota electron-release/RollsSuite-win32-x64/ em zip e publica no bucket rolls-updates
+// Empacota electron-release/RollsSuite-win32-x64/ em zip e publica em updates/native/
 // como `native/RollsSuite-win32-x64.zip` + `native/version.txt`.
+// Depois de rodar, faça commit/push da pasta updates/ para o GitHub.
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const BUCKET = "rolls-updates";
-
-if (!SUPABASE_URL || !SERVICE_KEY) { console.error("Missing env"); process.exit(1); }
-
 const SRC_DIR = path.resolve(__dirname, "..", "electron-release", "RollsSuite-win32-x64");
+const UPDATES_NATIVE_DIR = path.resolve(__dirname, "..", "..", "updates", "native");
 if (!fs.existsSync(SRC_DIR)) {
   console.error("Pasta não encontrada:", SRC_DIR);
   console.error("Rode primeiro: npx @electron/packager . RollsSuite --platform=win32 --arch=x64 --out=electron-release --overwrite --prune=true --icon=build/icon.ico --extra-resource=build/icon.ico");
@@ -40,27 +36,17 @@ try {
 const stat = fs.statSync(ZIP_OUT);
 console.log("Zip pronto:", ZIP_OUT, (stat.size / 1024 / 1024).toFixed(1), "MB");
 
-async function upload(rel, buf, contentType) {
-  const url = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${rel}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      apikey: SERVICE_KEY,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-    },
-    body: buf,
-  });
-  if (!r.ok) throw new Error(`upload ${rel}: ${r.status} ${await r.text()}`);
+function writeNativeFile(name, buf) {
+  fs.mkdirSync(UPDATES_NATIVE_DIR, { recursive: true });
+  fs.writeFileSync(path.join(UPDATES_NATIVE_DIR, name), buf);
 }
 
-(async () => {
+(() => {
   const zipBuf = fs.readFileSync(ZIP_OUT);
-  console.log(`Uploading native/RollsSuite-win32-x64.zip (${(zipBuf.length / 1024 / 1024).toFixed(1)} MB)…`);
-  await upload("native/RollsSuite-win32-x64.zip", zipBuf, "application/zip");
+  console.log(`Publishing updates/native/RollsSuite-win32-x64.zip (${(zipBuf.length / 1024 / 1024).toFixed(1)} MB)…`);
+  writeNativeFile("RollsSuite-win32-x64.zip", zipBuf);
   const meta = { version, generatedAt: new Date().toISOString(), platform: "win32-x64", file: "RollsSuite-win32-x64.zip", size: zipBuf.length };
-  await upload("native/version.txt", Buffer.from(version), "text/plain");
-  await upload("native/manifest.json", Buffer.from(JSON.stringify(meta, null, 2)), "application/json");
-  console.log("Done. Native version", version);
-})().catch((e) => { console.error(e); process.exit(1); });
+  writeNativeFile("version.txt", Buffer.from(version));
+  writeNativeFile("manifest.json", Buffer.from(JSON.stringify(meta, null, 2)));
+  console.log("Done. Commit/push updates/native/ to GitHub. Native version", version);
+})();
