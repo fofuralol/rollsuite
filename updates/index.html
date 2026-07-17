@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>RollSuite</title>
+    <meta name="description" content="RollSuite — gestão de depósitos, rolovers, apostas, saques e monitor de turno.">
+
+    <meta name="author" content="Lovable" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#0F172A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Monitor" />
+    <link rel="apple-touch-icon" href="./monitor-icon.png" />
+    <link rel="icon" type="image/png" href="./monitor-icon.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- TODO: Update og:title to match your application name -->
+    
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ad72358-ddea-4ba6-936e-bf9104a95645/id-preview-7a39b509--1e786c1f-fb94-47d7-895b-60906cce05aa.lovable.app-1777860142586.png">
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Lovable" />
+    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ad72358-ddea-4ba6-936e-bf9104a95645/id-preview-7a39b509--1e786c1f-fb94-47d7-895b-60906cce05aa.lovable.app-1777860142586.png">
+    <meta property="og:title" content="RollSuite">
+  <meta name="twitter:title" content="RollSuite">
+  <meta property="og:description" content="RollSuite — gestão de depósitos, rolovers, apostas, saques e monitor de turno.">
+  <meta name="twitter:description" content="RollSuite — gestão de depósitos, rolovers, apostas, saques e monitor de turno.">
+
+  <script type="module" crossorigin src="./assets/index-kw-rD9VG.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BrRS7AkQ.css">
+</head>
+
+  <body>
+    <div id="root"></div>
+    <div id="__crash" style="display:none;position:fixed;inset:0;z-index:99999;background:#0a0a0a;color:#fca5a5;font:12px/1.4 ui-monospace,Consolas,monospace;padding:16px;overflow:auto;white-space:pre-wrap;"></div>
+    <script>
+      (function(){
+        function show(msg){
+          try{
+            var el=document.getElementById('__crash');
+            if(!el) return;
+            el.style.display='block';
+            el.textContent=(el.textContent?el.textContent+'\n\n':'')+msg;
+          }catch(e){}
+        }
+        window.addEventListener('error',function(e){
+          show('[error] '+(e.message||(e.error&&e.error.message)||'')+'\n'+((e.error&&e.error.stack)||(e.filename+':'+e.lineno+':'+e.colno)));
+        });
+        window.addEventListener('unhandledrejection',function(e){
+          var r=e.reason; show('[promise] '+((r&&r.message)||String(r))+'\n'+((r&&r.stack)||''));
+        });
+        setTimeout(function(){
+          var root=document.getElementById('root');
+          if(root && !root.firstChild){
+            show('[timeout] React nao montou em 8s. Pressione F12 -> Console pra ver detalhes.');
+          }
+        },8000);
+      })();
+    </script>
+  </body>
+</html>
