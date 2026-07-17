@@ -33,6 +33,10 @@ export default function WhatsAppConfigSection() {
   const [forwardEnabled, setForwardEnabledState] = useState<boolean>(() => {
     try { return localStorage.getItem("wa_forward_enabled") !== "false"; } catch { return true; }
   });
+  const [forwardNumbers, setForwardNumbers] = useState<string>(() => {
+    try { return localStorage.getItem("wa_forward_numbers") || ""; } catch { return ""; }
+  });
+  const [forwardNumbersDirty, setForwardNumbersDirty] = useState(false);
 
   const toggleForward = (val: boolean) => {
     setForwardEnabledState(val);
@@ -40,6 +44,21 @@ export default function WhatsAppConfigSection() {
     try { window.dispatchEvent(new StorageEvent("storage", { key: "wa_forward_enabled", newValue: val ? "true" : "false" })); } catch {}
     toast.success(val ? "Reencaminhamento de mensagens ativado" : "Reencaminhamento de mensagens desativado");
   };
+
+  const saveForwardNumbers = () => {
+    const cleaned = forwardNumbers
+      .split(/[\n,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join("\n");
+    setForwardNumbers(cleaned);
+    try { localStorage.setItem("wa_forward_numbers", cleaned); } catch {}
+    try { window.dispatchEvent(new StorageEvent("storage", { key: "wa_forward_numbers", newValue: cleaned })); } catch {}
+    setForwardNumbersDirty(false);
+    const count = cleaned ? cleaned.split("\n").filter(Boolean).length : 0;
+    toast.success(count ? `Reencaminhamento salvo para ${count} número(s)` : "Números de reencaminhamento limpos");
+  };
+  
   
   
 
@@ -136,15 +155,41 @@ export default function WhatsAppConfigSection() {
       </div>
 
       {/* Reencaminhamento de mensagens */}
-      <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold text-sky-300">Reencaminhamento de mensagens</div>
-          <div className="text-[11px] text-muted-foreground">
-            Quando desligado, este PC não reencaminha mensagens do WhatsApp para outros dispositivos.
+      <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-sky-300">Reencaminhamento de mensagens</div>
+            <div className="text-[11px] text-muted-foreground">
+              Quando ativo, mensagens que baterem com palavras-chave são reenviadas via WhatsApp para os números abaixo (além do push na nuvem).
+            </div>
+          </div>
+          <Switch checked={forwardEnabled} onCheckedChange={toggleForward} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            Números de destino (um por linha, com DDI+DDD, ex: 5511999999999)
+          </label>
+          <Textarea
+            value={forwardNumbers}
+            onChange={(e) => { setForwardNumbers(e.target.value); setForwardNumbersDirty(true); }}
+            placeholder={"5511999999999\n5511988888888"}
+            className="text-xs min-h-[64px] font-mono"
+            disabled={!forwardEnabled}
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant={forwardNumbersDirty ? "default" : "outline"}
+              onClick={saveForwardNumbers}
+              disabled={!forwardNumbersDirty}
+              className="h-7 text-xs"
+            >
+              Salvar números
+            </Button>
           </div>
         </div>
-        <Switch checked={forwardEnabled} onCheckedChange={toggleForward} />
       </div>
+
 
       {/* Listener antigo */}
       <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 flex items-center justify-between gap-2">
