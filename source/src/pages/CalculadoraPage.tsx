@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calculator, Plus, Trash2, Check, ClipboardPaste, Tag, Search, KeyRound, ClipboardList, X, Pencil, CloudDownload, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calculator, Plus, Trash2, Check, ClipboardPaste, Tag, Search, KeyRound, ClipboardList, X, Pencil, CloudDownload, ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -383,6 +383,39 @@ const CalculadoraPage = () => {
     setGroups((prev) => prev.filter((g) => g.id !== gid));
   };
 
+  // Drag & drop: reorder rows within a group, and reorder groups themselves.
+  const dragRef = useRef<
+    | { type: "row"; gid: number; rid: number }
+    | { type: "group"; gid: number }
+    | null
+  >(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  const moveRow = (gid: number, fromRid: number, toRid: number) => {
+    setGroups((prev) => prev.map((g) => {
+      if (g.id !== gid) return g;
+      const from = g.rows.findIndex((r) => r.id === fromRid);
+      const to = g.rows.findIndex((r) => r.id === toRid);
+      if (from < 0 || to < 0 || from === to) return g;
+      const rows = [...g.rows];
+      const [it] = rows.splice(from, 1);
+      rows.splice(to, 0, it);
+      return { ...g, rows };
+    }));
+  };
+
+  const moveGroup = (fromGid: number, toGid: number) => {
+    setGroups((prev) => {
+      const from = prev.findIndex((g) => g.id === fromGid);
+      const to = prev.findIndex((g) => g.id === toGid);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = [...prev];
+      const [it] = next.splice(from, 1);
+      next.splice(to, 0, it);
+      return next;
+    });
+  };
+
   const addManualGroup = () => {
     setGroups((prev) => {
       const nextId = Math.max(0, ...prev.map((g) => g.id)) + 1;
@@ -607,7 +640,26 @@ const CalculadoraPage = () => {
     const groupHue = hueForTask(g.taskId);
     const groupStyle = groupHue != null ? ({ ["--task-hue" as never]: String(groupHue) } as React.CSSProperties) : undefined;
     return (
-      <div key={g.id} style={groupStyle} className={groupHue != null ? "task-glow rounded-xl border p-3" : undefined}>
+      <div
+        key={g.id}
+        style={groupStyle}
+        className={`${groupHue != null ? "task-glow rounded-xl border p-3 " : ""}transition-colors ${dragOver === `group-${g.id}` ? "ring-2 ring-primary/50 rounded-xl" : ""}`}
+        onDragOver={(e) => {
+          if (dragRef.current?.type === "group" && dragRef.current.gid !== g.id) {
+            e.preventDefault();
+            setDragOver(`group-${g.id}`);
+          }
+        }}
+        onDragLeave={() => { if (dragOver === `group-${g.id}`) setDragOver(null); }}
+        onDrop={(e) => {
+          if (dragRef.current?.type === "group" && dragRef.current.gid !== g.id) {
+            e.preventDefault();
+            moveGroup(dragRef.current.gid, g.id);
+          }
+          setDragOver(null);
+          dragRef.current = null;
+        }}
+      >
         {gIdx > 0 && (
           <div className="my-4 flex items-center gap-2">
             <div className="h-px flex-1 bg-border" />
@@ -617,6 +669,19 @@ const CalculadoraPage = () => {
         )}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">
           <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              draggable
+              onDragStart={(e) => {
+                dragRef.current = { type: "group", gid: g.id };
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => { dragRef.current = null; setDragOver(null); }}
+              title="Arrastar grupo"
+              className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
             <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">
               {g.taskId ? "TAREFA" : "MANUAL"}
             </Badge>
@@ -747,9 +812,46 @@ const CalculadoraPage = () => {
               }
             };
             return (
-              <div key={r.id} className={((c.rolls > 0 && metaTargets.has(c.rolls)) || (c.slotRolls && c.slotRolls.some((n) => n > 0 && metaTargets.has(n)))) ? "meta-match-glow rounded-md px-2 py-1 -mx-2" : ""}>
+              <div
+                key={r.id}
+                className={`${((c.rolls > 0 && metaTargets.has(c.rolls)) || (c.slotRolls && c.slotRolls.some((n) => n > 0 && metaTargets.has(n)))) ? "meta-match-glow rounded-md px-2 py-1 -mx-2 " : ""}${dragOver === `row-${g.id}-${r.id}` ? "ring-2 ring-primary/50 rounded-md" : ""}`}
+                onDragOver={(e) => {
+                  const d = dragRef.current;
+                  if (d?.type === "row" && d.gid === g.id && d.rid !== r.id) {
+                    e.preventDefault();
+                    setDragOver(`row-${g.id}-${r.id}`);
+                  }
+                }}
+                onDragLeave={() => { if (dragOver === `row-${g.id}-${r.id}`) setDragOver(null); }}
+                onDrop={(e) => {
+                  const d = dragRef.current;
+                  if (d?.type === "row" && d.gid === g.id && d.rid !== r.id) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    moveRow(g.id, d.rid, r.id);
+                  }
+                  setDragOver(null);
+                  dragRef.current = null;
+                }}
+              >
                 <div className={`grid grid-cols-2 ${rowGridTpl} gap-2 items-center`}>
-                  <div className="text-xs text-muted-foreground tabular-nums col-span-2 md:col-span-1">#{idx + 1}</div>
+                  <div className="text-xs text-muted-foreground tabular-nums col-span-2 md:col-span-1 flex items-center gap-1">
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        dragRef.current = { type: "row", gid: g.id, rid: r.id };
+                        e.dataTransfer.effectAllowed = "move";
+                        e.stopPropagation();
+                      }}
+                      onDragEnd={() => { dragRef.current = null; setDragOver(null); }}
+                      title="Arrastar linha"
+                      className="cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <GripVertical className="w-3 h-3" />
+                    </button>
+                    <span>#{idx + 1}</span>
+                  </div>
                   <Input type="number" inputMode="decimal" step="any" placeholder="Depósito"
                     value={r.deposito} onChange={(e) => updateRow(g.id, r.id, { deposito: e.target.value })}
                     onKeyDown={onColEnter("deposito")} data-calc-col="deposito" data-calc-group={g.id} data-calc-row={idx}
