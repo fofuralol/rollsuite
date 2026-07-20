@@ -1,5 +1,5 @@
 {
-  "version": "20260720181955",
+  "version": "20260720184659",
   "files": [
     "assets/Auth-DpCMqgZm.js",
     "assets/CalculadoraPage-C9rRz2kD.js",
@@ -37,10 +37,10 @@
     "index.html",
     "manifest.webmanifest",
     "monitor-icon.png",
+    "native/version.txt",
     "placeholder.svg",
     "robots.txt",
     "sw.js",
-    "version.txt",
     "zapo.zip",
     "zapo2-icon.png",
     "zapo2.zip"
