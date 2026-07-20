@@ -1,5 +1,5 @@
 {
-  "version": "20260720180610",
+  "version": "20260720181955",
   "files": [
     "assets/Auth-DpCMqgZm.js",
     "assets/CalculadoraPage-C9rRz2kD.js",
@@ -29,6 +29,7 @@
     "assets/ticket-C9loY96B.js",
     "assets/usePlatformMappings-W4ZUCMSV.js",
     "assets/useWaTasks-CS8yPgcp.js",
+    "extension.zip",
     "favicon.ico",
     "favicon.png",
     "gb-v2.8.zip",
@@ -39,6 +40,7 @@
     "placeholder.svg",
     "robots.txt",
     "sw.js",
+    "version.txt",
     "zapo.zip",
     "zapo2-icon.png",
     "zapo2.zip"
