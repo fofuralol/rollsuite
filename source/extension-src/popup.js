@@ -1,9 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
-const SUPABASE_URL = "https://zgbybodkkakaswmaroko.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnYnlib2Rra2FrYXN3bWFyb2tvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NDgyNjIsImV4cCI6MjA5MDIyNDI2Mn0.LFo6yOWrnx8bOBiwzQOdvpCrjYEflkVlVwjOcdSXY0M";
-const DEFAULT_WEBHOOK_URL = "https://pmwevrhnoxnbcuslkeid.supabase.co/functions/v1/meta-webhook?token=COLE_SEU_TOKEN_AQUI";
-const WEBHOOK_TOKEN_PLACEHOLDER = "COLE_SEU_TOKEN_AQUI";
+const DEFAULT_WEBHOOK_URL = "";
+const WEBHOOK_TOKEN_PLACEHOLDER = "";
 
 let currentTabId = null;
 let currentHost = "";
@@ -16,24 +14,8 @@ function storageKey() { return currentHost ? `mapping_${currentHost}` : "mapping
 function isCounterValid(r) { return r && r.width > 0 && r.height > 0; }
 function isButtonValid(p) { return p && typeof p.x === "number" && typeof p.y === "number"; }
 
-function getWebhookParts(url) {
-  try {
-    const parsed = new URL(String(url || ""));
-    return { host: parsed.host, token: parsed.searchParams.get("token") || "" };
-  } catch {
-    return null;
-  }
-}
-
-function resolveWebhookUrl(savedUrl) {
-  const saved = getWebhookParts(savedUrl);
-  const fallback = getWebhookParts(DEFAULT_WEBHOOK_URL);
-  if (!savedUrl || !saved || !fallback) return DEFAULT_WEBHOOK_URL;
-  if (saved.host !== fallback.host) return DEFAULT_WEBHOOK_URL;
-  if (!saved.token || saved.token === WEBHOOK_TOKEN_PLACEHOLDER) return DEFAULT_WEBHOOK_URL;
-  if (fallback.token && fallback.token !== WEBHOOK_TOKEN_PLACEHOLDER && saved.token !== fallback.token) return DEFAULT_WEBHOOK_URL;
-  return savedUrl;
-}
+// Modo offline puro — nenhuma URL de webhook remota é usada.
+function resolveWebhookUrl(savedUrl) { return savedUrl || ""; }
 
 function saveMapping() {
   chrome.storage.local.set({ [storageKey()]: mapping });
@@ -293,9 +275,9 @@ $("showOverlay").addEventListener("change", () => {
 });
 $("webhookUrl")?.addEventListener("input", () => chrome.storage.local.set({ webhookUrl: $("webhookUrl").value.trim() }));
 $("resetWebhook")?.addEventListener("click", () => {
-  $("webhookUrl").value = DEFAULT_WEBHOOK_URL;
-  chrome.storage.local.set({ webhookUrl: DEFAULT_WEBHOOK_URL });
-  showToast("Webhook restaurado ✔");
+  $("webhookUrl").value = "";
+  chrome.storage.local.set({ webhookUrl: "" });
+  showToast("Campo limpo (modo offline) ✔");
 });
 $("autoClickCount").addEventListener("input", () => {
   const v = $("autoClickCount").value.trim();

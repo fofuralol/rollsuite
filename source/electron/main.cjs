@@ -13,8 +13,8 @@ const proxyBalanceLocal = require("./proxy-balance.cjs");
 
 const EXT_TOKEN_RE = /(meta-webhook\?token=)([A-Za-z0-9._\-]+)/g;
 const EXT_SUPABASE_URL_RE = /https:\/\/([a-z0-9]{20})\.supabase\.co/g;
-const CURRENT_SUPABASE_REF = "pmwevrhnoxnbcuslkeid";
-const CURRENT_SUPABASE_URL = `https://${CURRENT_SUPABASE_REF}.supabase.co`;
+const OFFLINE_DEFAULT_TOKEN = "ROLLSUITE_OFFLINE";
+const OFFLINE_LOCAL_URL = "http://127.0.0.1:47821/meta";
 const EXT_TARGET_FILES = ["popup.js", "background.js"];
 
 async function extPickAndRead() {
@@ -30,6 +30,7 @@ async function extPickAndRead() {
     const entries = zip.getEntries();
     let currentToken = null;
     let currentSupabaseRef = null;
+    let hasOfflineLocalUrl = false;
     const found = [];
     for (const e of entries) {
       const base = path.basename(e.entryName);
@@ -37,23 +38,25 @@ async function extPickAndRead() {
       const txt = e.getData().toString("utf8");
       const m = [...txt.matchAll(EXT_TOKEN_RE)];
       const um = [...txt.matchAll(EXT_SUPABASE_URL_RE)];
-      if (m.length || um.length) {
+      const offlineCount = (txt.match(/127\.0\.0\.1|localhost|offline puro|Modo offline puro/gi) || []).length;
+      if (offlineCount) hasOfflineLocalUrl = true;
+      if (m.length || um.length || offlineCount) {
         found.push({ file: e.entryName, count: m.length, urlCount: um.length });
         if (!currentToken && m.length) currentToken = m[0][2];
         if (!currentSupabaseRef && um.length) currentSupabaseRef = um[0][1];
       }
     }
     if (!found.length) {
-      return { data: null, error: { message: "Nenhum token/URL encontrado em popup.js/background.js dessa extensão." } };
+      return { data: null, error: { message: "Nenhum arquivo de extensão reconhecido em popup.js/background.js." } };
     }
     return {
       data: {
         zipPath,
-        currentToken,
+        currentToken: currentToken || OFFLINE_DEFAULT_TOKEN,
         currentSupabaseRef,
         currentSupabaseUrl: currentSupabaseRef ? `https://${currentSupabaseRef}.supabase.co` : null,
-        targetSupabaseUrl: CURRENT_SUPABASE_URL,
-        needsUrlSwap: !!(currentSupabaseRef && currentSupabaseRef !== CURRENT_SUPABASE_REF),
+        targetSupabaseUrl: OFFLINE_LOCAL_URL,
+        needsUrlSwap: !!currentSupabaseRef || !hasOfflineLocalUrl,
         files: found,
       },
       error: null,
@@ -69,9 +72,8 @@ async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
   };
   try {
     if (!zipPath || !fs.existsSync(zipPath)) throw new Error("Zip não encontrado: " + zipPath);
-    if (!newToken || !/^[A-Za-z0-9._\-]+$/.test(newToken)) throw new Error("Token inválido");
-    const targetUrl = (newSupabaseUrl || CURRENT_SUPABASE_URL).replace(/\/$/, "");
-    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(targetUrl)) throw new Error("URL do Supabase inválida");
+    const token = String(newToken || OFFLINE_DEFAULT_TOKEN).trim() || OFFLINE_DEFAULT_TOKEN;
+    const targetUrl = String(newSupabaseUrl || OFFLINE_LOCAL_URL).replace(/\/$/, "");
     send("Abrindo zip…", 5, `zip: ${zipPath}`);
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
@@ -86,7 +88,7 @@ async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
       const before = e.getData().toString("utf8");
       let count = 0;
       let uCount = 0;
-      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { count++; return p1 + newToken; });
+      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { count++; return p1 + token; });
       after = after.replace(EXT_SUPABASE_URL_RE, () => { uCount++; return targetUrl; });
       if (count > 0 || uCount > 0) {
         zip.updateFile(e.entryName, Buffer.from(after, "utf8"));
@@ -96,7 +98,9 @@ async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
         send(`Atualizado: ${e.entryName}`, 30 + filesTouched * 20, `${count} token(s) + ${uCount} URL(s) em ${e.entryName}`);
       }
     }
-    if (replaced === 0 && urlReplaced === 0) throw new Error("Nenhum token/URL foi encontrado para substituir.");
+    if (replaced === 0 && urlReplaced === 0) {
+      send("Modo offline já detectado", 80, "Nenhum token/URL remoto encontrado; zip mantido em modo local/offline.");
+    }
 
     send("Gravando zip…", 85, `total: ${replaced} token(s) + ${urlReplaced} URL(s) em ${filesTouched} arquivo(s)`);
     const backup = zipPath.replace(/\.zip$/i, `.backup-${Date.now()}.zip`);
@@ -120,9 +124,8 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
     try { sender.send("extension:inject-progress", { step, pct, log }); } catch {}
   };
   try {
-    if (!token || !/^[A-Za-z0-9._\-]+$/.test(token)) throw new Error("Token inválido");
-    const targetUrl = (supabaseUrl || CURRENT_SUPABASE_URL).replace(/\/$/, "");
-    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(targetUrl)) throw new Error("URL do Supabase inválida");
+    const offlineToken = String(token || OFFLINE_DEFAULT_TOKEN).trim() || OFFLINE_DEFAULT_TOKEN;
+    const targetUrl = String(supabaseUrl || OFFLINE_LOCAL_URL).replace(/\/$/, "");
 
     // Template embutido no app: dist/extension.zip; fallback: zipar extension-src/ do ASAR.
     const templatePath = path.join(app.getAppPath(), "dist", "extension.zip");
@@ -151,13 +154,13 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
 
     const save = await dialog.showSaveDialog({
       title: "Salvar extensão pré-configurada",
-      defaultPath: `rolldash-extension-${token.slice(0, 8)}.zip`,
+      defaultPath: "rollsuite-extension-offline.zip",
       filters: [{ name: "Extensão (zip)", extensions: ["zip"] }],
     });
     if (save.canceled || !save.filePath) return { data: null, error: null };
 
     fs.writeFileSync(save.filePath, sourceZipBuf);
-    send("Injetando token + URL…", 40, `arquivo: ${save.filePath}`);
+    send("Preparando extensão offline…", 40, `arquivo: ${save.filePath}`);
 
     const zip = new AdmZip(save.filePath);
     let replaced = 0, urlReplaced = 0, filesTouched = 0;
@@ -166,15 +169,17 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
       if (!EXT_TARGET_FILES.includes(base)) continue;
       const before = e.getData().toString("utf8");
       let c = 0, u = 0;
-      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { c++; return p1 + token; });
+      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { c++; return p1 + offlineToken; });
       after = after.replace(EXT_SUPABASE_URL_RE, () => { u++; return targetUrl; });
       if (c > 0 || u > 0) {
         zip.updateFile(e.entryName, Buffer.from(after, "utf8"));
         replaced += c; urlReplaced += u; filesTouched++;
-        send(`Atualizado: ${e.entryName}`, 60 + filesTouched * 15, `${c} token(s) + ${u} URL(s) em ${e.entryName}`);
+        send(`Atualizado: ${e.entryName}`, 60 + filesTouched * 15, `${c} token(s) + ${u} URL(s) removidos/trocados em ${e.entryName}`);
       }
     }
-    if (replaced === 0 && urlReplaced === 0) throw new Error("Template não tem marcadores de token/URL.");
+    if (replaced === 0 && urlReplaced === 0) {
+      send("Template já offline", 85, "Nenhum marcador remoto encontrado; gerando mesmo sem token.");
+    }
 
     zip.writeZip(save.filePath);
     send("Concluído ✅", 100, `Extensão pronta em: ${save.filePath}`);

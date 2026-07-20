@@ -108,9 +108,14 @@ async function getCurrentMetaSourceToken() {
 }
 
 function shouldAcceptForThisDevice(ev: MetaEvent): boolean {
-  // sem token local configurado → não notifica nada (evita ruído cruzado)
+  // Modo offline puro: evento vindo do servidor local do Electron já é loopback-only
+  // e não precisa de token para tocar/entrar no card.
+  if (IS_DESKTOP && (ev as any)._local) {
+    return !localToken || !ev.source_token || ev.source_token === localToken;
+  }
+  // sem token local configurado → não notifica nada de nuvem (evita ruído cruzado)
   if (!localToken) return false;
-  // eventos antigos sem source_token: bloqueia (não dá pra atribuir a um PC)
+  // eventos antigos sem source_token: bloqueia na nuvem (não dá pra atribuir a um PC)
   if (!ev.source_token) return false;
   return ev.source_token === localToken;
 }
@@ -223,6 +228,9 @@ function acceptEvents(list: MetaEvent[]) {
   const accepted = list.filter((ev) => {
     if (!ev?.id || dismissed.has(ev.id)) return false;
     if (ev.source_token) recentSourceTokens.add(ev.source_token);
+    if (IS_DESKTOP && (ev as any)._local && (!localToken || !ev.source_token || ev.source_token === localToken)) {
+      return true;
+    }
     if (!localToken) {
       lastRejectedToken = ev.source_token || null;
       return false;
@@ -419,19 +427,11 @@ function bindDesktopPollingOnce() {
 async function syncMetaTokenToElectron() {
   try {
     const api = (window as any).electronAPI;
-    if (!api?.metaGetConfig || !api?.metaSetConfig) return;
-    const token =
-      (typeof localStorage !== "undefined" && localStorage.getItem("monitor_push_forward_wa_token")) || "";
-    if (!token) {
-      console.warn("[meta] sem wa_token salvo (ative o Push no Monitor) — polling do Electron não vai retornar eventos");
-      return;
-    }
-    const cfgRes = await api.metaGetConfig().catch(() => null);
-    const cur = (cfgRes && cfgRes.data) || {};
-    if (cur.token === token && cur.enabled !== false) return;
-    await api.metaSetConfig({ token, enabled: true });
-    console.log("[meta] token sincronizado para Electron (polling habilitado)");
-    try { await api.metaPollNow?.(); } catch {}
+    if (!api?.metaSetConfig) return;
+    await api.metaSetConfig({ token: "", cloud_enabled: false, local_enabled: true, enabled: false });
+    localToken = null;
+    setDiagnostics((prev) => ({ ...prev, localToken: null }));
+    console.log("[meta] modo offline puro ativo — nuvem/token desabilitados");
   } catch (e) {
     console.warn("[meta] syncMetaTokenToElectron fail", e);
   }

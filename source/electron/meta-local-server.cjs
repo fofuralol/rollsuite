@@ -50,9 +50,6 @@ function handle(req, res) {
       const cfg = getConfig();
       if (!cfg.local_enabled) return json(res, 503, { ok: false, error: "local disabled" });
       const token = String(body.token || "").trim();
-      if (!token || !cfg.token || token !== cfg.token) {
-        return json(res, 401, { ok: false, error: "invalid token" });
-      }
       const ev = {
         id: String(body.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
         title: body.title || body.tab_title || null,
@@ -60,7 +57,7 @@ function handle(req, res) {
         steps: body.steps ?? null,
         target: body.target ?? null,
         source_tab_id: body.source_tab_id ?? body.tab_id ?? null,
-        source_token: token,
+        source_token: token || null,
         created_at: body.created_at || body.timestamp || new Date().toISOString(),
         _local: true,
       };

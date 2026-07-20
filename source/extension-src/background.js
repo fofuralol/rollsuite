@@ -1,68 +1,12 @@
-// Background service worker — handles tab capture stream and dashboard sync
+// Background service worker — OFFLINE-ONLY build (sem cloud/webhook remoto)
 let offscreenReady = false;
 let lastCaptureTime = 0;
 const MIN_CAPTURE_INTERVAL = 150;
 
-const SUPABASE_URL = "https://zgbybodkkakaswmaroko.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnYnlib2Rra2FrYXN3bWFyb2tvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NDgyNjIsImV4cCI6MjA5MDIyNDI2Mn0.LFo6yOWrnx8bOBiwzQOdvpCrjYEflkVlVwjOcdSXY0M";
-const DEFAULT_WEBHOOK_URL = "https://pmwevrhnoxnbcuslkeid.supabase.co/functions/v1/meta-webhook?token=COLE_SEU_TOKEN_AQUI";
-const WEBHOOK_TOKEN_PLACEHOLDER = "COLE_SEU_TOKEN_AQUI";
-
-const syncQueue = [];
-let syncInFlight = false;
-let lastQueuedStep = -1;
-let lastSentStep = -1;
 let monitorTabId = null;
 
-function processSyncQueue() {
-  if (syncInFlight || syncQueue.length === 0) return;
-
-  const step = syncQueue.shift();
-  syncInFlight = true;
-
-  chrome.storage.local.get(["dashUserId", "dashDbRowId", "dashMaeId", "dashFilhaId"], (data) => {
-    if (!data.dashUserId || !data.dashDbRowId || !data.dashMaeId || data.dashFilhaId == null) {
-      syncInFlight = false;
-      processSyncQueue();
-      return;
-    }
-
-    fetch(`${SUPABASE_URL}/functions/v1/extension-roll-sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY },
-      body: JSON.stringify({
-        user_id: data.dashUserId,
-        tabela_id: data.dashDbRowId,
-        mae_id: data.dashMaeId,
-        conta_id: Number(data.dashFilhaId),
-        giros_feitos: step,
-      }),
-    })
-      .then((r) => {
-        if (r.ok) {
-          lastSentStep = step;
-          console.log("[BG] Sync OK:", step);
-        } else {
-          console.warn("[BG] Sync failed:", r.status, "step:", step);
-        }
-      })
-      .catch((e) => console.error("[BG] Sync error:", e))
-      .finally(() => {
-        syncInFlight = false;
-        processSyncQueue();
-      });
-  });
-}
-
-function syncStep(steps) {
-  const normalized = Number.isFinite(steps) ? Math.max(0, Math.floor(steps)) : 0;
-  const highestKnownStep = Math.max(lastQueuedStep, lastSentStep);
-  if (normalized <= highestKnownStep) return;
-
-  syncQueue.push(normalized);
-  lastQueuedStep = normalized;
-  processSyncQueue();
-}
+// Sync remoto desativado no modo offline puro.
+function syncStep(_steps) { /* no-op */ }
 
 async function ensureOffscreen() {
   if (offscreenReady) return;
@@ -149,25 +93,8 @@ function normalizeTargetMessage(msg) {
   };
 }
 
-function getWebhookParts(url) {
-  try {
-    const parsed = new URL(String(url || ""));
-    return { host: parsed.host, token: parsed.searchParams.get("token") || "" };
-  } catch {
-    return null;
-  }
-}
+// Webhook remoto desativado — modo offline puro.
 
-function shouldResetWebhookUrl(savedUrl) {
-  if (!savedUrl) return true;
-  const saved = getWebhookParts(savedUrl);
-  const fallback = getWebhookParts(DEFAULT_WEBHOOK_URL);
-  if (!saved || !fallback) return true;
-  if (saved.host !== fallback.host) return true;
-  if (!saved.token || saved.token === WEBHOOK_TOKEN_PLACEHOLDER) return true;
-  if (fallback.token && fallback.token !== WEBHOOK_TOKEN_PLACEHOLDER && saved.token !== fallback.token) return true;
-  return false;
-}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
@@ -329,26 +256,12 @@ function notifyTargetReached(tabId, msg, done) {
         });
       } catch (e) { console.warn("[BG] notif err", e); }
 
-      chrome.storage.local.get(["webhookUrl"], async (data) => {
-        let url = (data.webhookUrl && data.webhookUrl.trim()) || DEFAULT_WEBHOOK_URL;
-        if (shouldResetWebhookUrl(url)) {
-          const oldParts = getWebhookParts(url);
-          const newParts = getWebhookParts(DEFAULT_WEBHOOK_URL);
-          console.warn("[BG] webhookUrl inválido/obsoleto — resetando", oldParts?.host, "→", newParts?.host);
-          url = DEFAULT_WEBHOOK_URL;
-          chrome.storage.local.set({ webhookUrl: DEFAULT_WEBHOOK_URL });
-        }
-        const parts = getWebhookParts(url);
-        if (!parts?.token || parts.token === WEBHOOK_TOKEN_PLACEHOLDER) {
-          const error = "Token do webhook não foi injetado na extensão";
-          console.warn("[BG] webhook bloqueado:", error);
-          done?.({ ok: false, error });
-          return;
-        }
-        // 1) Envio local: tenta o app rodando em 127.0.0.1 (offline-friendly).
-        //    Fire-and-forget — não bloqueia o webhook cloud.
+      // Modo offline puro: envia apenas para o app local em 127.0.0.1.
+      // Não há cloud/webhook remoto, não há exigência de token.
+      chrome.storage.local.get(["localToken"], async (data) => {
+        const localToken = (data.localToken && String(data.localToken).trim()) || "";
         const localPayload = {
-          token: parts.token,
+          token: localToken,
           id: `ext-${tabId}-${Date.now()}`,
           event: "target_reached",
           tab_id: tabId,
@@ -365,6 +278,7 @@ function notifyTargetReached(tabId, msg, done) {
         };
         const localPorts = [47821, 47822, 47823, 47824, 47825];
         let localOk = false;
+        let lastErr = null;
         for (const p of localPorts) {
           try {
             const lr = await fetch(`http://127.0.0.1:${p}/meta`, {
@@ -374,40 +288,12 @@ function notifyTargetReached(tabId, msg, done) {
               signal: AbortSignal.timeout ? AbortSignal.timeout(1200) : undefined,
             });
             if (lr.ok) { localOk = true; console.log("[BG] meta local OK :", p); break; }
-            if (lr.status === 401 || lr.status === 503) break; // token errado ou desativado
-          } catch {}
+            lastErr = `HTTP ${lr.status}`;
+            if (lr.status === 401 || lr.status === 503) break;
+          } catch (e) { lastErr = e?.message || String(e); }
         }
-
-        // 2) Cloud: continua enviando pro webhook (a menos que só local esteja ligado no app).
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "target_reached",
-            tab_id: tabId,
-            tab_title: tabTitle,
-            tab_url: tabUrl,
-            url: tabUrl,
-            title: tabTitle,
-            steps: steps ?? null,
-            target: target ?? null,
-            balance,
-            balance_raw: balanceRaw,
-            timestamp: new Date().toISOString(),
-          }),
-        }).then(async (r) => {
-          if (r.ok) {
-            console.log("[BG] webhook OK", r.status);
-            done?.({ ok: true, status: r.status, local: localOk });
-            return;
-          }
-          const text = await r.text().catch(() => "");
-          console.warn("[BG] webhook", r.status, text);
-          done?.({ ok: localOk, status: r.status, error: text || `HTTP ${r.status}`, local: localOk });
-        }).catch((e) => {
-          console.warn("[BG] webhook err", e);
-          done?.({ ok: localOk, error: e?.message || String(e), local: localOk });
-        });
+        if (localOk) done?.({ ok: true, local: true });
+        else done?.({ ok: false, local: false, error: lastErr || "App local não respondeu (127.0.0.1)" });
       });
     });
   } catch (e) {

@@ -312,12 +312,6 @@ function SectionExtensao() {
         localStorage.getItem("monitor_push_forward_wa_token") ||
         "";
     } catch {}
-    if (!token) {
-      const { toast } = await import("sonner");
-      toast.error("Nenhum token padrão salvo. Abra o injetor e selecione/crie um token primeiro.");
-      setInjectorOpen(true);
-      return;
-    }
     setGenerating(true);
     const { data, error } = await api.extGenerate({ token });
     setGenerating(false);
@@ -332,7 +326,7 @@ function SectionExtensao() {
       <div>
         <h3 className="text-sm font-semibold mb-1">Extensão pré-configurada</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Gera um .zip da extensão do Chrome já com o token padrão deste PC e a URL deste app injetados.
+          Gera um .zip da extensão do Chrome em modo offline puro, sem exigir token.
         </p>
         <Button
           variant="default"
@@ -350,7 +344,7 @@ function SectionExtensao() {
           <div className="border-t border-border/60 pt-4">
             <h3 className="text-sm font-semibold mb-1">Recebimento de metas</h3>
             <p className="text-xs text-muted-foreground mb-3">
-              A extensão pode enviar a meta atingida por dois caminhos. Ative um, o outro, ou ambos.
+              A extensão envia a meta direto para este app no mesmo PC, sem internet.
             </p>
 
             <div className="space-y-2 max-w-md">
@@ -360,17 +354,17 @@ function SectionExtensao() {
                   <div className="text-[11px] text-muted-foreground">
                     {localStatus.running
                       ? `Ativo em 127.0.0.1:${localStatus.port} — funciona offline no mesmo PC.`
-                      : "Desligado. A extensão só usará a nuvem."}
+                      : "Desligado. Ligue para receber metas offline no mesmo PC."}
                   </div>
                 </div>
                 <Switch checked={localEnabled} onCheckedChange={toggleLocal} />
               </label>
 
-              <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+              <label className="hidden items-center justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
                 <div>
                   <div className="text-sm font-medium">Sincronização em nuvem</div>
                   <div className="text-[11px] text-muted-foreground">
-                    Recebe metas via internet. Necessário para receber de outros PCs/celular.
+                    Desativada no modo offline puro.
                   </div>
                 </div>
                 <Switch checked={cloudEnabled} onCheckedChange={toggleCloud} />
@@ -387,7 +381,7 @@ function SectionExtensao() {
           <div className="border-t border-border/60 pt-4">
             <h3 className="text-sm font-semibold mb-1">Injetor de token</h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Gera uma extensão pré-configurada com o token e a URL deste app, ou injeta em um .zip existente.
+              Avançado: reprocessa um .zip existente para remover dependência de nuvem/token.
             </p>
             <Button variant="default" className="gap-2" onClick={() => setInjectorOpen(true)}>
               <Puzzle className="w-4 h-4" /> Abrir injetor
