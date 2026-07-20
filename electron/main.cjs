@@ -11,11 +11,26 @@ const automation = require("./automation.cjs");
 const gdrive = require("./gdrive.cjs");
 const proxyBalanceLocal = require("./proxy-balance.cjs");
 
-const EXT_TOKEN_RE = /(meta-webhook\?token=)([A-Za-z0-9._\-]+)/g;
-const EXT_SUPABASE_URL_RE = /https:\/\/([a-z0-9]{20})\.supabase\.co/g;
-const CURRENT_SUPABASE_REF = "pmwevrhnoxnbcuslkeid";
-const CURRENT_SUPABASE_URL = `https://${CURRENT_SUPABASE_REF}.supabase.co`;
+const EXT_TOKEN_RE = /([?&]token=)([A-Za-z0-9._\-]+)/g;
+const EXT_WEBHOOK_URL_RE = /http:\/\/127\.0\.0\.1:\d+\/meta\?token=[A-Za-z0-9._\-]+/g;
+const CURRENT_WEBHOOK_URL = "http://127.0.0.1:47821/meta?token=COLE_SEU_TOKEN_AQUI";
 const EXT_TARGET_FILES = ["popup.js", "background.js"];
+
+function withWebhookToken(url, token) {
+  const target = new URL(String(url || CURRENT_WEBHOOK_URL));
+  target.searchParams.set("token", token);
+  return target.toString();
+}
+
+function isValidWebhookUrl(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    if (!parsed.searchParams.get("token")) return false;
+    return parsed.protocol === "http:" && parsed.hostname === "127.0.0.1" && parsed.pathname === "/meta";
+  } catch {
+    return false;
+  }
+}
 
 async function extPickAndRead() {
   const r = await dialog.showOpenDialog({
@@ -29,18 +44,18 @@ async function extPickAndRead() {
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
     let currentToken = null;
-    let currentSupabaseRef = null;
+    let currentWebhookUrl = null;
     const found = [];
     for (const e of entries) {
       const base = path.basename(e.entryName);
       if (!EXT_TARGET_FILES.includes(base)) continue;
       const txt = e.getData().toString("utf8");
       const m = [...txt.matchAll(EXT_TOKEN_RE)];
-      const um = [...txt.matchAll(EXT_SUPABASE_URL_RE)];
+      const um = [...txt.matchAll(EXT_WEBHOOK_URL_RE)];
       if (m.length || um.length) {
         found.push({ file: e.entryName, count: m.length, urlCount: um.length });
         if (!currentToken && m.length) currentToken = m[0][2];
-        if (!currentSupabaseRef && um.length) currentSupabaseRef = um[0][1];
+        if (!currentWebhookUrl && um.length) currentWebhookUrl = um[0][0];
       }
     }
     if (!found.length) {
@@ -50,10 +65,10 @@ async function extPickAndRead() {
       data: {
         zipPath,
         currentToken,
-        currentSupabaseRef,
-        currentSupabaseUrl: currentSupabaseRef ? `https://${currentSupabaseRef}.supabase.co` : null,
-        targetSupabaseUrl: CURRENT_SUPABASE_URL,
-        needsUrlSwap: !!(currentSupabaseRef && currentSupabaseRef !== CURRENT_SUPABASE_REF),
+        currentSupabaseRef: null,
+        currentSupabaseUrl: currentWebhookUrl,
+        targetSupabaseUrl: CURRENT_WEBHOOK_URL,
+        needsUrlSwap: !!(currentWebhookUrl && currentWebhookUrl !== CURRENT_WEBHOOK_URL),
         files: found,
       },
       error: null,
@@ -63,15 +78,15 @@ async function extPickAndRead() {
   }
 }
 
-async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
+async function extInjectToken(sender, { zipPath, newToken, newWebhookUrl }) {
   const send = (step, pct, log) => {
     try { sender.send("extension:inject-progress", { step, pct, log }); } catch {}
   };
   try {
     if (!zipPath || !fs.existsSync(zipPath)) throw new Error("Zip não encontrado: " + zipPath);
     if (!newToken || !/^[A-Za-z0-9._\-]+$/.test(newToken)) throw new Error("Token inválido");
-    const targetUrl = (newSupabaseUrl || CURRENT_SUPABASE_URL).replace(/\/$/, "");
-    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(targetUrl)) throw new Error("URL do Supabase inválida");
+    const targetUrl = withWebhookToken(newWebhookUrl || CURRENT_WEBHOOK_URL, newToken);
+    if (!isValidWebhookUrl(targetUrl)) throw new Error("URL local da extensão inválida");
     send("Abrindo zip…", 5, `zip: ${zipPath}`);
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
@@ -86,8 +101,8 @@ async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
       const before = e.getData().toString("utf8");
       let count = 0;
       let uCount = 0;
-      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { count++; return p1 + newToken; });
-      after = after.replace(EXT_SUPABASE_URL_RE, () => { uCount++; return targetUrl; });
+      let after = before.replace(EXT_WEBHOOK_URL_RE, () => { uCount++; return targetUrl; });
+      after = after.replace(EXT_TOKEN_RE, (_m, p1) => { count++; return p1 + newToken; });
       if (count > 0 || uCount > 0) {
         zip.updateFile(e.entryName, Buffer.from(after, "utf8"));
         replaced += count;
@@ -115,24 +130,33 @@ async function extInjectToken(sender, { zipPath, newToken, newSupabaseUrl }) {
 ipcMain.handle("extension:pick-and-read", () => extPickAndRead());
 ipcMain.handle("extension:inject-token", (e, payload) => extInjectToken(e.sender, payload || {}));
 
-async function extGenerate(sender, { token, supabaseUrl } = {}) {
-  const send = (step, pct, log) => {
-    try { sender.send("extension:inject-progress", { step, pct, log }); } catch {}
-  };
-  try {
-    if (!token || !/^[A-Za-z0-9._\-]+$/.test(token)) throw new Error("Token inválido");
-    const targetUrl = (supabaseUrl || CURRENT_SUPABASE_URL).replace(/\/$/, "");
-    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(targetUrl)) throw new Error("URL do Supabase inválida");
+function readExtensionTemplate() {
+  const candidates = [
+    // Bundle atualizado baixado do GitHub: rolls-data/app-update/extension.zip.
+    currentAppDir && path.join(currentAppDir(), "extension.zip"),
+    // Bundle interno do app: resources/app.asar/dist/extension.zip.
+    bundledDir && path.join(bundledDir, "extension.zip"),
+    // Compatibilidade com empacotamentos antigos.
+    path.join(app.getAppPath(), "dist", "extension.zip"),
+    path.join(app.getAppPath(), "extension.zip"),
+    process.resourcesPath && path.join(process.resourcesPath, "extension.zip"),
+  ].filter(Boolean);
 
-    // Template embutido no app: dist/extension.zip; fallback: zipar extension-src/ do ASAR.
-    const templatePath = path.join(app.getAppPath(), "dist", "extension.zip");
-    const extSrcPath = path.join(app.getAppPath(), "extension-src");
-    let sourceZipBuf;
-    if (fs.existsSync(templatePath)) {
-      send("Abrindo template embutido…", 5, `template: ${templatePath}`);
-      sourceZipBuf = fs.readFileSync(templatePath);
-    } else if (fs.existsSync(extSrcPath)) {
-      send("Compactando extension-src/ do ASAR…", 5, `origem: ${extSrcPath}`);
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        return { buffer: fs.readFileSync(candidate), source: candidate };
+      }
+    } catch {}
+  }
+
+  const srcCandidates = [
+    path.join(app.getAppPath(), "extension-src"),
+    path.join(__dirname, "..", "extension-src"),
+  ];
+  for (const extSrcPath of srcCandidates) {
+    try {
+      if (!fs.existsSync(extSrcPath)) continue;
       const zbuild = new AdmZip();
       const walk = (dir, rel = "") => {
         for (const name of fs.readdirSync(dir)) {
@@ -144,10 +168,24 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
         }
       };
       walk(extSrcPath);
-      sourceZipBuf = zbuild.toBuffer();
-    } else {
-      throw new Error(`Template não encontrado: ${templatePath} nem ${extSrcPath}`);
-    }
+      return { buffer: zbuild.toBuffer(), source: extSrcPath };
+    } catch {}
+  }
+
+  throw new Error(`Template não encontrado. Procurei em: ${candidates.concat(srcCandidates).join(" | ")}`);
+}
+
+async function extGenerate(sender, { token, webhookUrl } = {}) {
+  const send = (step, pct, log) => {
+    try { sender.send("extension:inject-progress", { step, pct, log }); } catch {}
+  };
+  try {
+    if (!token || !/^[A-Za-z0-9._\-]+$/.test(token)) throw new Error("Token inválido");
+    const targetUrl = withWebhookToken(webhookUrl || CURRENT_WEBHOOK_URL, token);
+    if (!isValidWebhookUrl(targetUrl)) throw new Error("URL local da extensão inválida");
+
+    const { buffer: sourceZipBuf, source } = readExtensionTemplate();
+    send("Abrindo template offline…", 5, `template: ${source}`);
 
     const save = await dialog.showSaveDialog({
       title: "Salvar extensão pré-configurada",
@@ -166,8 +204,8 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
       if (!EXT_TARGET_FILES.includes(base)) continue;
       const before = e.getData().toString("utf8");
       let c = 0, u = 0;
-      let after = before.replace(EXT_TOKEN_RE, (_m, p1) => { c++; return p1 + token; });
-      after = after.replace(EXT_SUPABASE_URL_RE, () => { u++; return targetUrl; });
+      let after = before.replace(EXT_WEBHOOK_URL_RE, () => { u++; return targetUrl; });
+      after = after.replace(EXT_TOKEN_RE, (_m, p1) => { c++; return p1 + token; });
       if (c > 0 || u > 0) {
         zip.updateFile(e.entryName, Buffer.from(after, "utf8"));
         replaced += c; urlReplaced += u; filesTouched++;
@@ -187,8 +225,55 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
 }
 ipcMain.handle("extension:generate", (e, payload) => extGenerate(e.sender, payload || {}));
 
-const UPDATE_BASE = "https://pmwevrhnoxnbcuslkeid.supabase.co/storage/v1/object/public/rolls-updates";
-const NATIVE_BASE = `${UPDATE_BASE}/native`;
+const DEFAULT_UPDATE_BASE = "https://raw.githubusercontent.com/fofuralol/rollsuite/main/updates";
+
+function updateSourcePath() {
+  return path.join(dataDir, "update-source.json");
+}
+function normalizeBase(u) {
+  return String(u || "").trim().replace(/\/+$/, "");
+}
+function readUpdateSource() {
+  try {
+    const f = updateSourcePath();
+    if (fs.existsSync(f)) {
+      const j = JSON.parse(fs.readFileSync(f, "utf8"));
+      const base = normalizeBase(j.base) || DEFAULT_UPDATE_BASE;
+      const nativeBase = normalizeBase(j.nativeBase) || `${base}/native`;
+      return { base, nativeBase, custom: !!j.custom };
+    }
+  } catch {}
+  return { base: DEFAULT_UPDATE_BASE, nativeBase: `${DEFAULT_UPDATE_BASE}/native`, custom: false };
+}
+function writeUpdateSource(patch) {
+  const cur = readUpdateSource();
+  const base = normalizeBase(patch?.base) || cur.base;
+  const nativeBase = normalizeBase(patch?.nativeBase) || `${base}/native`;
+  const next = { base, nativeBase, custom: true, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(updateSourcePath(), JSON.stringify(next, null, 2), "utf8");
+  return next;
+}
+function resetUpdateSource() {
+  try { fs.unlinkSync(updateSourcePath()); } catch {}
+  return readUpdateSource();
+}
+function getBases() {
+  const s = readUpdateSource();
+  return { UPDATE_BASE: s.base, NATIVE_BASE: s.nativeBase };
+}
+
+ipcMain.handle("update:get-source", () => {
+  try { return { data: { ...readUpdateSource(), default: DEFAULT_UPDATE_BASE }, error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
+ipcMain.handle("update:set-source", (_e, patch) => {
+  try { return { data: writeUpdateSource(patch || {}), error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
+ipcMain.handle("update:reset-source", () => {
+  try { return { data: resetUpdateSource(), error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
 
 const APP_USER_MODEL_ID = "com.rollssuite.desktop";
 try { app.setAppUserModelId(APP_USER_MODEL_ID); } catch {}
@@ -332,7 +417,10 @@ function validateAppDir(dir) {
     if (!fs.existsSync(indexPath)) return { ok: false, reason: "index.html ausente" };
     const html = fs.readFileSync(indexPath, "utf8");
     const refs = [];
-    for (const match of html.matchAll(/\b(?:src|href)=["']\.\/([^"']+\.(?:js|css))["']/g)) refs.push(match[1]);
+    for (const match of html.matchAll(/\b(?:src|href)=["'](?:\.\/|\/)?([^"']+\.(?:js|css))(?:\?[^"']*)?["']/g)) {
+      const rel = String(match[1] || "").replace(/^[\/]+/, "").replace(/\.\./g, "");
+      if (rel) refs.push(rel);
+    }
     if (!refs.length) return { ok: false, reason: "index.html sem JS/CSS" };
     const missing = refs.filter((rel) => !fs.existsSync(path.join(dir, rel.replace(/\//g, path.sep))));
     if (missing.length) return { ok: false, reason: `assets ausentes: ${missing.join(", ")}` };
@@ -449,10 +537,7 @@ app.whenReady().then(() => {
   });
 });
 
-// ----- Meta events polling (notifica .exe quando a meta bate) -----
-const META_FN_URL = "https://pmwevrhnoxnbcuslkeid.supabase.co/functions/v1/meta-events-recent";
-const META_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtd2V2cmhub3huYmN1c2xrZWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTE5MTMsImV4cCI6MjA5ODc2NzkxM30.5YcvB4ETz0tborOn58GzrBOiP3OQMJ_HQiJf77ccWrM";
-
+// ----- Meta events offline (extensão → .exe via servidor local) -----
 function metaConfigPath() { return path.join(dataDir, "meta-config.json"); }
 function metaStatePath() { return path.join(dataDir, "meta-state.json"); }
 function readJsonSafe(p, fallback) {
@@ -461,10 +546,8 @@ function readJsonSafe(p, fallback) {
 }
 function getMetaConfig() {
   const cfg = readJsonSafe(metaConfigPath(), {});
-  // Back-compat: campo antigo `enabled` = cloud_enabled
-  const cloud_enabled = cfg.cloud_enabled != null
-    ? cfg.cloud_enabled !== false
-    : (cfg.enabled !== false);
+  // Offline por padrão: não depende de backend externo para receber metas.
+  const cloud_enabled = false;
   const local_enabled = cfg.local_enabled !== false; // default: ON
   return {
     token: cfg.token || "",
@@ -528,48 +611,12 @@ async function applyLocalServerState(cfg) {
 }
 
 async function pollMetaOnce() {
-  try {
-    const cfg = getMetaConfig();
-    if (!cfg.cloud_enabled || !cfg.token) { return; }
-    const state = getMetaState();
-    const r = await fetch(META_FN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": META_ANON, "Authorization": `Bearer ${META_ANON}` },
-      body: JSON.stringify({ token: cfg.token, since: state.since }),
-    });
-    if (!r.ok) {
-      const body = await r.text().catch(() => "");
-      console.warn("[meta-poll] HTTP", r.status, body.slice(0, 200));
-      return;
-    }
-    const data = await r.json().catch(() => ({}));
-    const events = Array.isArray(data.events) ? data.events : [];
-    if (!events.length) {
-      if (data.now) setMetaState({ ...state, since: data.now });
-      return;
-    }
-    console.log("[meta-poll] recebidos", events.length, "evento(s)");
-    const seen = new Set(state.seen || []);
-    let maxTs = state.since;
-    for (const ev of [...events].reverse()) {
-      if (!ev?.id || seen.has(ev.id)) continue;
-      seen.add(ev.id);
-      if (ev.source_token && ev.source_token !== cfg.token) {
-        if (ev.created_at && ev.created_at > maxTs) maxTs = ev.created_at;
-        continue;
-      }
-      dispatchMetaEvent(ev);
-      if (ev.created_at && ev.created_at > maxTs) maxTs = ev.created_at;
-    }
-    const seenArr = Array.from(seen).slice(-500);
-    setMetaState({ since: data.now || maxTs, seen: seenArr });
-  } catch (e) { console.warn("[meta-poll] err", e?.message || e); }
+  return;
 }
 function startMetaPolling() {
   if (metaTimer) return;
-  setTimeout(() => { pollMetaOnce(); }, 2000);
-  metaTimer = setInterval(pollMetaOnce, 5000);
-  // Sobe também o servidor local se estiver habilitado
+  metaTimer = setInterval(() => {}, 60_000);
+  // Sobe o servidor local se estiver habilitado
   applyLocalServerState().catch(() => {});
 }
 
@@ -598,15 +645,7 @@ ipcMain.handle("meta:list", async (_e, opts) => {
   try {
     const cfg = getMetaConfig();
     if (!cfg.token) return { data: [], error: null };
-    const since = (opts && opts.since) || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const r = await fetch(META_FN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": META_ANON, "Authorization": `Bearer ${META_ANON}` },
-      body: JSON.stringify({ token: cfg.token, since }),
-    });
-    if (!r.ok) return { data: [], error: { message: `HTTP ${r.status}` } };
-    const data = await r.json().catch(() => ({}));
-    return { data: Array.isArray(data.events) ? data.events : [], error: null };
+    return { data: [], error: null };
   } catch (e) {
     return { data: [], error: { message: String(e?.message || e) } };
   }
@@ -806,6 +845,7 @@ async function downloadFile(url, destAbs) {
 
 ipcMain.handle("update:check", async () => {
   try {
+    const { UPDATE_BASE } = getBases();
     const manifest = await fetchJson(`${UPDATE_BASE}/manifest.json`);
     const installed = getInstalledVersion();
     const available = String(manifest.version || "").trim();
@@ -826,6 +866,7 @@ ipcMain.handle("update:check", async () => {
 
 ipcMain.handle("update:apply", async (e) => {
   try {
+    const { UPDATE_BASE } = getBases();
     const manifest = await fetchJson(`${UPDATE_BASE}/manifest.json`);
     const files = Array.isArray(manifest.files) ? manifest.files : [];
     if (!files.length) throw new Error("Manifesto vazio");
@@ -994,6 +1035,7 @@ function getInstalledNativeVersion() {
 
 ipcMain.handle("update:check-native", async () => {
   try {
+    const { NATIVE_BASE } = getBases();
     const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
     const installed = getInstalledNativeVersion();
     return { data: { installed, available: remote, hasUpdate: remote && remote !== installed }, error: null };
@@ -1004,6 +1046,7 @@ ipcMain.handle("update:check-native", async () => {
 
 ipcMain.handle("update:apply-native", async (e) => {
   try {
+    const { NATIVE_BASE } = getBases();
     const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
     if (!remote) throw new Error("Versão remota inválida");
     const url = `${NATIVE_BASE}/RollsSuite-win32-x64.zip?t=${Date.now()}`;
@@ -1200,14 +1243,6 @@ ipcMain.handle("wa:logout", async () => {
 ipcMain.handle("wa:state", () => ({ data: wa.getState(), error: null }));
 ipcMain.handle("wa:config-get", () => ({ data: wa.getConfig(), error: null }));
 ipcMain.handle("wa:config-set", (_e, patch) => ({ data: wa.setConfig(patch || {}), error: null }));
-ipcMain.handle("wa:forward-test", async (_e, text) => {
-  try { return { data: await wa.testForward(text || ""), error: null }; }
-  catch (e) { return { data: null, error: { message: String(e?.message || e) } }; }
-});
-ipcMain.handle("wa:forward-card", async (_e, msg) => {
-  try { return { data: await wa.forwardCardMessage(msg || {}), error: null }; }
-  catch (e) { return { data: null, error: { message: String(e?.message || e) } }; }
-});
 ipcMain.handle("wa:diagnostics", () => ({ data: wa.getDiagnostics(), error: null }));
 ipcMain.handle("wa:set-live-chat", (_e, enabled) => { try { wa.setLiveChatEnabled(!!enabled); } catch {} return { data: true, error: null }; });
 ipcMain.handle("wa:list-groups", async () => {
