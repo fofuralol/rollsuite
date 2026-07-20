@@ -130,9 +130,10 @@ async function extInjectToken(sender, { zipPath, newToken, newWebhookUrl }) {
 ipcMain.handle("extension:pick-and-read", () => extPickAndRead());
 ipcMain.handle("extension:inject-token", (e, payload) => extInjectToken(e.sender, payload || {}));
 
-function readExtensionTemplate() {
+async function readExtensionTemplate() {
   const candidates = [
     // Bundle atualizado baixado do GitHub: rolls-data/app-update/extension.zip.
+    updateDir && path.join(updateDir, "extension.zip"),
     currentAppDir && path.join(currentAppDir(), "extension.zip"),
     // Bundle interno do app: resources/app.asar/dist/extension.zip.
     bundledDir && path.join(bundledDir, "extension.zip"),
@@ -140,6 +141,7 @@ function readExtensionTemplate() {
     path.join(app.getAppPath(), "dist", "extension.zip"),
     path.join(app.getAppPath(), "extension.zip"),
     process.resourcesPath && path.join(process.resourcesPath, "extension.zip"),
+    process.resourcesPath && path.join(process.resourcesPath, "app.asar.unpacked", "dist", "extension.zip"),
   ].filter(Boolean);
 
   for (const candidate of candidates) {
@@ -172,6 +174,24 @@ function readExtensionTemplate() {
     } catch {}
   }
 
+  // Último recurso: baixa extension.zip direto do repo de updates configurado.
+  try {
+    const { UPDATE_BASE } = getBases();
+    const url = `${UPDATE_BASE}/extension.zip?t=${Date.now()}`;
+    const r = await fetch(url);
+    if (r.ok) {
+      const buf = Buffer.from(await r.arrayBuffer());
+      try {
+        if (updateDir) {
+          fs.mkdirSync(updateDir, { recursive: true });
+          fs.writeFileSync(path.join(updateDir, "extension.zip"), buf);
+        }
+      } catch {}
+      return { buffer: buf, source: url };
+    }
+  } catch (e) {
+    console.warn("[ext] fallback remoto falhou:", e?.message || e);
+  }
   throw new Error(`Template não encontrado. Procurei em: ${candidates.concat(srcCandidates).join(" | ")}`);
 }
 
@@ -184,7 +204,7 @@ async function extGenerate(sender, { token, webhookUrl } = {}) {
     const targetUrl = withWebhookToken(webhookUrl || CURRENT_WEBHOOK_URL, token);
     if (!isValidWebhookUrl(targetUrl)) throw new Error("URL local da extensão inválida");
 
-    const { buffer: sourceZipBuf, source } = readExtensionTemplate();
+    const { buffer: sourceZipBuf, source } = await readExtensionTemplate();
     send("Abrindo template offline…", 5, `template: ${source}`);
 
     const save = await dialog.showSaveDialog({
