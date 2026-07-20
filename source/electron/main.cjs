@@ -1087,122 +1087,51 @@ ipcMain.handle("update:apply-native", async (e) => {
 
     const exeDir = path.dirname(app.getPath("exe"));
     const stagingZip = path.join(dataDir, "native-update.zip");
-    const stagingDir = path.join(dataDir, "native-staging");
-    const swapPs1 = path.join(dataDir, "swap-update.ps1");
-    const swapVbs = path.join(dataDir, "swap-update.vbs");
     fs.writeFileSync(stagingZip, zipBuf);
 
-    // PowerShell updater (sem janela visível, sem cmd.exe)
-    const psEsc = (p) => p.replace(/'/g, "''");
-    const ps = `
-$ErrorActionPreference = 'Stop'
-$PID_TO_WAIT = ${process.pid}
-$ZIP = '${psEsc(stagingZip)}'
-$INSTALL = '${psEsc(exeDir)}'
-$STAGING = '${psEsc(stagingDir)}'
-$VERSION = '${psEsc(remote)}'
-$EXE = Join-Path $INSTALL '${APP_EXE_NAME}'
-$LOG = Join-Path $INSTALL 'native-update-error.log'
-$LEGACY_EXES = @(${LEGACY_EXE_NAMES.map((name) => `'${name}'`).join(", ")})
-
-try { Wait-Process -Id $PID_TO_WAIT -Timeout 60 } catch {}
-Start-Sleep -Milliseconds 500
-
-try {
-  if (Test-Path $STAGING) { Remove-Item -Recurse -Force $STAGING }
-  New-Item -ItemType Directory -Path $STAGING | Out-Null
-  Expand-Archive -LiteralPath $ZIP -DestinationPath $STAGING -Force
-
-  $rootExe = Join-Path $STAGING 'RollsSuite.exe'
-  if (Test-Path $rootExe) {
-    $srcPath = $STAGING
-  } else {
-    $dirs = Get-ChildItem -Path $STAGING -Directory
-    if ($dirs.Count -eq 1) {
-      $srcPath = $dirs[0].FullName
-    } else {
-      $srcPath = $STAGING
+    // Locate the standalone updater.exe. Shipped next to the main .exe
+    // (bundled by the packager from resources/bin/updater.exe).
+    const candidates = [
+      path.join(exeDir, "updater.exe"),
+      path.join(exeDir, "resources", "bin", "updater.exe"),
+      path.join(process.resourcesPath || "", "bin", "updater.exe"),
+      path.join(__dirname, "bin", "updater.exe"),
+    ];
+    let updaterExe = null;
+    for (const c of candidates) {
+      try { if (c && fs.existsSync(c)) { updaterExe = c; break; } } catch {}
     }
-  }
-
-  $sourceExe = Join-Path $srcPath 'RollsSuite.exe'
-  if (!(Test-Path $sourceExe)) {
-    throw 'RollsSuite.exe não encontrado no pacote extraído'
-  }
-
-  $copied = $false
-  for ($i = 1; $i -le 40; $i++) {
-    try {
-      Copy-Item -Path (Join-Path $srcPath '*') -Destination $INSTALL -Recurse -Force -ErrorAction Stop
-      if (!(Test-Path $EXE)) {
-        throw 'Executável não encontrado após cópia'
-      }
-
-      $srcHash = (Get-FileHash -LiteralPath $sourceExe -Algorithm SHA256 -ErrorAction Stop).Hash
-      $dstHash = (Get-FileHash -LiteralPath $EXE -Algorithm SHA256 -ErrorAction Stop).Hash
-      if ($srcHash -ne $dstHash) {
-        throw 'Executável instalado não confere com o pacote baixado'
-      }
-
-      $copied = $true
-      break
-    } catch {
-      if ($i -ge 40) { throw }
-      Start-Sleep -Milliseconds 750
+    if (!updaterExe) {
+      throw new Error("updater.exe não encontrado. Reinstale o app.");
     }
-  }
 
-  if (-not $copied) {
-    throw 'Não foi possível substituir o executável principal'
-  }
+    // Copy updater.exe out of the install dir (it can't overwrite itself while running).
+    const runUpdater = path.join(dataDir, "updater-run.exe");
+    try { fs.copyFileSync(updaterExe, runUpdater); } catch (err) {
+      throw new Error(`Falha ao preparar updater.exe: ${err.message || err}`);
+    }
 
-  foreach ($legacyExe in $LEGACY_EXES) {
-    try {
-      $legacyPath = Join-Path $INSTALL $legacyExe
-      if ((Test-Path $legacyPath) -and ($legacyPath -ne $EXE)) {
-        Remove-Item -Force $legacyPath -ErrorAction SilentlyContinue
-      }
-    } catch {}
-  }
-
-  Set-Content -Path (Join-Path $INSTALL 'native-version.txt') -Value $VERSION -Encoding ASCII
-
-  Remove-Item -Recurse -Force $STAGING
-  Remove-Item -Force $ZIP
-
-
-  Start-Process -FilePath $EXE -WindowStyle Normal
-  exit 0
-
-  exit 0
-} catch {
-  Add-Content -Path $LOG -Value ("[" + (Get-Date) + "] " + $_.Exception.Message)
-  Start-Process -FilePath $EXE -WindowStyle Normal
-  exit 1
-}
-`.trim();
-    fs.writeFileSync(swapPs1, ps, "utf8");
-    fs.writeFileSync(
-      swapVbs,
-      [
-        'Set shell = CreateObject("WScript.Shell")',
-        `cmd = "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File ""${swapPs1.replace(/"/g, '""')}"""`,
-        "shell.Run cmd, 0, False",
-      ].join("\r\n"),
-      "utf8",
-    );
+    const args = [
+      "--pid", String(process.pid),
+      "--zip", stagingZip,
+      "--install", exeDir,
+      "--exe", APP_EXE_NAME,
+      "--version", remote,
+      "--log", path.join(exeDir, "native-update-error.log"),
+    ];
+    if (LEGACY_EXE_NAMES && LEGACY_EXE_NAMES.length) {
+      args.push("--legacy", LEGACY_EXE_NAMES.join(","));
+    }
 
     try { e.sender.send("update:native-progress", { phase: "ready", pct: 100 }); } catch {}
 
-    // Usa o host GUI do Windows (wscript) para iniciar o PowerShell oculto sem abrir console.
-    const child = spawn(
-      "wscript.exe",
-      [swapVbs],
-      { detached: true, stdio: "ignore", windowsHide: true },
-    );
+    const child = spawn(runUpdater, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      cwd: dataDir,
+    });
     child.unref();
-
-
 
     setTimeout(() => {
       try { wa.stopWa?.(); } catch {}

@@ -27,6 +27,17 @@ try { fs.unlinkSync(ZIP_OUT); } catch {}
 const NATIVE_VERSION_FILE = path.join(SRC_DIR, "native-version.txt");
 fs.writeFileSync(NATIVE_VERSION_FILE, `${version}\n`, "utf8");
 
+// Copy the standalone updater.exe next to the main .exe so it ships in the zip.
+const UPDATER_SRC = path.resolve(__dirname, "bin", "updater.exe");
+const UPDATER_DST = path.join(SRC_DIR, "updater.exe");
+if (fs.existsSync(UPDATER_SRC)) {
+  fs.copyFileSync(UPDATER_SRC, UPDATER_DST);
+  console.log("Bundled updater.exe →", UPDATER_DST);
+} else {
+  console.warn("[warn] electron/bin/updater.exe não encontrado — updates in-place não funcionarão. Rode `go build` no updater-src/.");
+}
+
+
 console.log("Zipping contents of", SRC_DIR);
 try {
   execSync(`nix run nixpkgs#zip -- -qr "${ZIP_OUT}" .`, { cwd: SRC_DIR, stdio: "inherit" });
