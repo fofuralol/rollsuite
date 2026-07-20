@@ -187,8 +187,55 @@ async function extGenerate(sender, { token, supabaseUrl } = {}) {
 }
 ipcMain.handle("extension:generate", (e, payload) => extGenerate(e.sender, payload || {}));
 
-const UPDATE_BASE = "https://raw.githubusercontent.com/fofuralol/rollsuite/main/updates";
-const NATIVE_BASE = `${UPDATE_BASE}/native`;
+const DEFAULT_UPDATE_BASE = "https://raw.githubusercontent.com/fofuralol/rollsuite/main/updates";
+
+function updateSourcePath() {
+  return path.join(dataDir, "update-source.json");
+}
+function normalizeBase(u) {
+  return String(u || "").trim().replace(/\/+$/, "");
+}
+function readUpdateSource() {
+  try {
+    const f = updateSourcePath();
+    if (fs.existsSync(f)) {
+      const j = JSON.parse(fs.readFileSync(f, "utf8"));
+      const base = normalizeBase(j.base) || DEFAULT_UPDATE_BASE;
+      const nativeBase = normalizeBase(j.nativeBase) || `${base}/native`;
+      return { base, nativeBase, custom: !!j.custom };
+    }
+  } catch {}
+  return { base: DEFAULT_UPDATE_BASE, nativeBase: `${DEFAULT_UPDATE_BASE}/native`, custom: false };
+}
+function writeUpdateSource(patch) {
+  const cur = readUpdateSource();
+  const base = normalizeBase(patch?.base) || cur.base;
+  const nativeBase = normalizeBase(patch?.nativeBase) || `${base}/native`;
+  const next = { base, nativeBase, custom: true, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(updateSourcePath(), JSON.stringify(next, null, 2), "utf8");
+  return next;
+}
+function resetUpdateSource() {
+  try { fs.unlinkSync(updateSourcePath()); } catch {}
+  return readUpdateSource();
+}
+function getBases() {
+  const s = readUpdateSource();
+  return { UPDATE_BASE: s.base, NATIVE_BASE: s.nativeBase };
+}
+
+ipcMain.handle("update:get-source", () => {
+  try { return { data: { ...readUpdateSource(), default: DEFAULT_UPDATE_BASE }, error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
+ipcMain.handle("update:set-source", (_e, patch) => {
+  try { return { data: writeUpdateSource(patch || {}), error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
+ipcMain.handle("update:reset-source", () => {
+  try { return { data: resetUpdateSource(), error: null }; }
+  catch (e) { return { data: null, error: { message: String(e.message || e) } }; }
+});
 
 const APP_USER_MODEL_ID = "com.rollssuite.desktop";
 try { app.setAppUserModelId(APP_USER_MODEL_ID); } catch {}
@@ -809,6 +856,7 @@ async function downloadFile(url, destAbs) {
 
 ipcMain.handle("update:check", async () => {
   try {
+    const { UPDATE_BASE } = getBases();
     const manifest = await fetchJson(`${UPDATE_BASE}/manifest.json`);
     const installed = getInstalledVersion();
     const available = String(manifest.version || "").trim();
@@ -829,6 +877,7 @@ ipcMain.handle("update:check", async () => {
 
 ipcMain.handle("update:apply", async (e) => {
   try {
+    const { UPDATE_BASE } = getBases();
     const manifest = await fetchJson(`${UPDATE_BASE}/manifest.json`);
     const files = Array.isArray(manifest.files) ? manifest.files : [];
     if (!files.length) throw new Error("Manifesto vazio");
@@ -997,6 +1046,7 @@ function getInstalledNativeVersion() {
 
 ipcMain.handle("update:check-native", async () => {
   try {
+    const { NATIVE_BASE } = getBases();
     const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
     const installed = getInstalledNativeVersion();
     return { data: { installed, available: remote, hasUpdate: remote && remote !== installed }, error: null };
@@ -1007,6 +1057,7 @@ ipcMain.handle("update:check-native", async () => {
 
 ipcMain.handle("update:apply-native", async (e) => {
   try {
+    const { NATIVE_BASE } = getBases();
     const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
     if (!remote) throw new Error("Versão remota inválida");
     const url = `${NATIVE_BASE}/RollsSuite-win32-x64.zip?t=${Date.now()}`;

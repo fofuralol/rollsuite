@@ -32,6 +32,7 @@ import ZoomButton from "@/components/ZoomButton";
 
 import GlobalBackupButtons from "@/components/GlobalBackupButtons";
 import DesktopUpdateButton from "@/components/DesktopUpdateButton";
+import UpdateSourceConfig from "@/components/UpdateSourceConfig";
 import MontanteSettingsDialog from "@/components/MontanteSettingsDialog";
 import { triggerMontanteResult } from "@/components/MontanteResultOverlay";
 import WhatsAppConfigSection from "@/components/WhatsAppConfigSection";
@@ -173,6 +174,9 @@ function SectionAtualizacao() {
         Verifica se há uma nova versão do app desktop ou do conteúdo interno e aplica.
       </p>
       <DesktopUpdateButton />
+      <div className="pt-4 mt-2 border-t border-border/50">
+        <UpdateSourceConfig />
+      </div>
     </div>
   );
 }
