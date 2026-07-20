@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Empacota electron-release/RollsSuite-win32-x64/ em zip e publica em updates/native/
-// como `native/RollsSuite-win32-x64.zip` + `native/version.txt`.
+// Empacota electron-release/RollsSuite-win32-x64/ em zip e publica em updates/native/.
+// Para caber no GitHub, o zip nativo é dividido em partes menores e o app
+// reconstrói o arquivo lendo `manifest.json`.
 // Depois de rodar, faça commit/push da pasta updates/ para o GitHub.
 const fs = require("fs");
 const path = require("path");
@@ -8,6 +9,7 @@ const { execSync } = require("child_process");
 
 const SRC_DIR = path.resolve(__dirname, "..", "electron-release", "RollsSuite-win32-x64");
 const UPDATES_NATIVE_DIR = path.resolve(__dirname, "..", "..", "updates", "native");
+const PART_SIZE = 9 * 1024 * 1024;
 if (!fs.existsSync(SRC_DIR)) {
   console.error("Pasta não encontrada:", SRC_DIR);
   console.error("Rode primeiro: npx @electron/packager . RollsSuite --platform=win32 --arch=x64 --out=electron-release --overwrite --prune=true --icon=build/icon.ico --extra-resource=build/icon.ico");
@@ -52,11 +54,39 @@ function writeNativeFile(name, buf) {
   fs.writeFileSync(path.join(UPDATES_NATIVE_DIR, name), buf);
 }
 
+function clearNativeDir() {
+  fs.mkdirSync(UPDATES_NATIVE_DIR, { recursive: true });
+  for (const name of fs.readdirSync(UPDATES_NATIVE_DIR)) {
+    fs.rmSync(path.join(UPDATES_NATIVE_DIR, name), { recursive: true, force: true });
+  }
+}
+
+function partSuffix(index) {
+  const a = Math.floor(index / 26);
+  const b = index % 26;
+  return String.fromCharCode(97 + a) + String.fromCharCode(97 + b);
+}
+
 (() => {
   const zipBuf = fs.readFileSync(ZIP_OUT);
-  console.log(`Publishing updates/native/RollsSuite-win32-x64.zip (${(zipBuf.length / 1024 / 1024).toFixed(1)} MB)…`);
-  writeNativeFile("RollsSuite-win32-x64.zip", zipBuf);
-  const meta = { version, generatedAt: new Date().toISOString(), platform: "win32-x64", file: "RollsSuite-win32-x64.zip", size: zipBuf.length };
+  clearNativeDir();
+  console.log(`Publishing split native update (${(zipBuf.length / 1024 / 1024).toFixed(1)} MB)…`);
+  const files = [];
+  for (let offset = 0, i = 0; offset < zipBuf.length; offset += PART_SIZE, i++) {
+    const name = `RollsSuite-win32-x64.zip.part-${partSuffix(i)}`;
+    const chunk = zipBuf.subarray(offset, Math.min(offset + PART_SIZE, zipBuf.length));
+    writeNativeFile(name, chunk);
+    files.push(name);
+    console.log(`  ${name} ${(chunk.length / 1024 / 1024).toFixed(1)} MB`);
+  }
+  const meta = {
+    version,
+    generatedAt: new Date().toISOString(),
+    platform: "win32-x64",
+    files,
+    size: zipBuf.length,
+    partSize: PART_SIZE,
+  };
   writeNativeFile("version.txt", Buffer.from(version));
   writeNativeFile("manifest.json", Buffer.from(JSON.stringify(meta, null, 2)));
   console.log("Done. Commit/push updates/native/ to GitHub. Native version", version);

@@ -847,7 +847,7 @@ function getInstalledVersion() {
 
 async function fetchJson(url) {
   const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status} em ${url}`);
   return await r.json();
 }
 
@@ -857,6 +857,83 @@ async function downloadFile(url, destAbs) {
   const buf = Buffer.from(await r.arrayBuffer());
   fs.mkdirSync(path.dirname(destAbs), { recursive: true });
   fs.writeFileSync(destAbs, buf);
+}
+
+async function fetchTextIfOk(url) {
+  const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
+  if (!r.ok) return { ok: false, status: r.status, text: "" };
+  return { ok: true, status: r.status, text: await r.text() };
+}
+
+async function fetchNativeManifest(nativeBase) {
+  const manifestUrl = `${nativeBase}/manifest.json`;
+  try {
+    const manifest = await fetchJson(manifestUrl);
+    const version = String(manifest.version || "").trim();
+    const file = String(manifest.file || "RollsSuite-win32-x64.zip").trim();
+    const files = Array.isArray(manifest.files)
+      ? manifest.files.map((f) => String(f || "").trim()).filter(Boolean)
+      : [];
+    if (version && (file || files.length)) {
+      return { version, file, files, manifest };
+    }
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (!/HTTP 404/.test(msg)) throw e;
+  }
+
+  const versionRes = await fetchTextIfOk(`${nativeBase}/version.txt`);
+  if (!versionRes.ok) {
+    if (versionRes.status === 404) return null;
+    throw new Error(`HTTP ${versionRes.status} em ${nativeBase}/version.txt`);
+  }
+  const version = versionRes.text.trim();
+  if (!version || /^404\b/i.test(version)) return null;
+  return { version, file: "RollsSuite-win32-x64.zip", files: [], manifest: null };
+}
+
+async function downloadNativeZip(nativeBase, nativeInfo, destAbs, sender) {
+  const parts = Array.isArray(nativeInfo?.files) ? nativeInfo.files : [];
+  if (parts.length) {
+    fs.mkdirSync(path.dirname(destAbs), { recursive: true });
+    const out = fs.createWriteStream(destAbs);
+    let done = 0;
+    try {
+      for (const rel of parts) {
+        const safe = String(rel || "").replace(/^[\\/]+/, "").replace(/\.\./g, "");
+        if (!safe) continue;
+        const r = await fetch(`${nativeBase}/${safe}?t=${Date.now()}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} para ${nativeBase}/${safe}`);
+        const buf = Buffer.from(await r.arrayBuffer());
+        out.write(buf);
+        done++;
+        try { sender?.send("update:native-progress", { phase: "download", pct: Math.round((done / parts.length) * 100) }); } catch {}
+      }
+    } finally {
+      await new Promise((resolve) => out.end(resolve));
+    }
+    return;
+  }
+
+  const file = String(nativeInfo?.file || "RollsSuite-win32-x64.zip").replace(/^[\\/]+/, "").replace(/\.\./g, "");
+  const url = `${nativeBase}/${file}`;
+  const r = await fetch(`${url}?t=${Date.now()}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status} para ${url}`);
+  const total = Number(r.headers.get("content-length")) || 0;
+  const reader = r.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (total) {
+      const pct = Math.round((received / total) * 100);
+      try { sender?.send("update:native-progress", { phase: "download", pct }); } catch {}
+    }
+  }
+  fs.writeFileSync(destAbs, Buffer.concat(chunks));
 }
 
 ipcMain.handle("update:check", async () => {
@@ -1052,8 +1129,12 @@ function getInstalledNativeVersion() {
 ipcMain.handle("update:check-native", async () => {
   try {
     const { NATIVE_BASE } = getBases();
-    const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
+    const info = await fetchNativeManifest(NATIVE_BASE);
     const installed = getInstalledNativeVersion();
+    if (!info) {
+      return { data: { installed, available: installed, hasUpdate: false, missing: true }, error: null };
+    }
+    const remote = info.version;
     return { data: { installed, available: remote, hasUpdate: remote && remote !== installed }, error: null };
   } catch (e) {
     return { data: null, error: { message: String(e.message || e) } };
@@ -1063,31 +1144,15 @@ ipcMain.handle("update:check-native", async () => {
 ipcMain.handle("update:apply-native", async (e) => {
   try {
     const { NATIVE_BASE } = getBases();
-    const remote = (await (await fetch(`${NATIVE_BASE}/version.txt?t=${Date.now()}`)).text()).trim();
+    const info = await fetchNativeManifest(NATIVE_BASE);
+    if (!info) throw new Error("Update nativo não publicado nesta origem");
+    const remote = info.version;
     if (!remote) throw new Error("Versão remota inválida");
-    const url = `${NATIVE_BASE}/RollsSuite-win32-x64.zip?t=${Date.now()}`;
     try { e.sender.send("update:native-progress", { phase: "download", pct: 0 }); } catch {}
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const total = Number(r.headers.get("content-length")) || 0;
-    const reader = r.body.getReader();
-    const chunks = [];
-    let received = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      if (total) {
-        const pct = Math.round((received / total) * 100);
-        try { e.sender.send("update:native-progress", { phase: "download", pct }); } catch {}
-      }
-    }
-    const zipBuf = Buffer.concat(chunks);
 
     const exeDir = path.dirname(app.getPath("exe"));
     const stagingZip = path.join(dataDir, "native-update.zip");
-    fs.writeFileSync(stagingZip, zipBuf);
+    await downloadNativeZip(NATIVE_BASE, info, stagingZip, e.sender);
 
     // Locate the standalone updater.exe. Shipped next to the main .exe
     // (bundled by the packager from resources/bin/updater.exe).
