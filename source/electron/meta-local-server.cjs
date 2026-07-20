@@ -48,8 +48,12 @@ function handle(req, res) {
       let body;
       try { body = JSON.parse(raw || "{}"); } catch { return json(res, 400, { ok: false, error: "invalid json" }); }
       const cfg = getConfig();
-      if (!cfg.local_enabled) return json(res, 503, { ok: false, error: "local disabled" });
       const token = String(body.token || "").trim();
+      // Em modo offline (sem token configurado no app), aceitamos qualquer token vindo da extensão
+      if (cfg.local_enabled && cfg.token && token && token !== cfg.token) {
+        return json(res, 401, { ok: false, error: "token mismatch" });
+      }
+      if (!cfg.local_enabled) return json(res, 503, { ok: false, error: "local disabled" });
       const ev = {
         id: String(body.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
         title: body.title || body.tab_title || null,
