@@ -498,9 +498,11 @@ let metaTimer = null;
 function dispatchMetaEvent(ev, { silent = false } = {}) {
   if (!ev) return;
   const cfg = getMetaConfig();
-  // Só notifica metas do PRÓPRIO token
-  if (ev.source_token && cfg.token && ev.source_token !== cfg.token) {
-    return;
+  // No modo offline, se o app não tem token, permitimos que eventos locais passem.
+  // Se houver um token configurado, filtramos apenas os que batem.
+  if (cfg.token && ev.source_token && ev.source_token !== cfg.token) {
+    // Se não for um evento _local, ou se for local mas com token divergente e o app TEM um token, ignoramos.
+    if (!ev._local || (ev._local && cfg.token)) return;
   }
   if (!silent) {
     const title = ev.title ? `🎯 Meta: ${ev.title}` : "🎯 Meta atingida";
