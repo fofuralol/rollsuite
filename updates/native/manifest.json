@@ -1,31 +1,14 @@
 {
-  "version": "20260720210657",
-  "generatedAt": "2026-07-20T21:07:28.066Z",
+  "version": "20260929154000",
+  "generatedAt": "2026-09-29T15:16:26.529Z",
   "platform": "win32-x64",
   "files": [
-    "RollsSuite-win32-x64.zip.part-aa",
-    "RollsSuite-win32-x64.zip.part-ab",
-    "RollsSuite-win32-x64.zip.part-ac",
-    "RollsSuite-win32-x64.zip.part-ad",
-    "RollsSuite-win32-x64.zip.part-ae",
-    "RollsSuite-win32-x64.zip.part-af",
-    "RollsSuite-win32-x64.zip.part-ag",
-    "RollsSuite-win32-x64.zip.part-ah",
-    "RollsSuite-win32-x64.zip.part-ai",
-    "RollsSuite-win32-x64.zip.part-aj",
-    "RollsSuite-win32-x64.zip.part-ak",
-    "RollsSuite-win32-x64.zip.part-al",
-    "RollsSuite-win32-x64.zip.part-am",
-    "RollsSuite-win32-x64.zip.part-an",
-    "RollsSuite-win32-x64.zip.part-ao",
-    "RollsSuite-win32-x64.zip.part-ap",
-    "RollsSuite-win32-x64.zip.part-aq",
-    "RollsSuite-win32-x64.zip.part-ar",
-    "RollsSuite-win32-x64.zip.part-as",
-    "RollsSuite-win32-x64.zip.part-at",
-    "RollsSuite-win32-x64.zip.part-au",
-    "RollsSuite-win32-x64.zip.part-av"
+    "RollsSuite-win32-x64.zip.part-000",
+    "RollsSuite-win32-x64.zip.part-001",
+    "RollsSuite-win32-x64.zip.part-002",
+    "RollsSuite-win32-x64.zip.part-003",
+    "RollsSuite-win32-x64.zip.part-004"
   ],
-  "size": 205211501,
-  "partSize": 9437184
+  "size": 241581778,
+  "sha256": "217a9089d25125fe376f002a1c28e540af27cfa769e43a6aa2a24411450c411f"
 }
